@@ -1,0 +1,290 @@
+/* =======================
+   PAGE BACKGROUND
+======================= */
+.package-page {
+  background: linear-gradient(145deg, #f0f8ff, #e0f7fa);
+  min-height: 100vh;
+  padding: 30px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* =======================
+   QUOTE CARD
+======================= */
+.quote-card {
+  max-width: 1200px;
+  margin: auto;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 30px;
+  border-radius: 25px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15),
+              0 10px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #d0d0d0;
+}
+
+/* =======================
+   BRAND HEADER
+======================= */
+.brand-title {
+  text-align: center;
+  font-size: 38px;
+  font-weight: 900;
+  margin-bottom: 10px;
+  color: #0d47a1;
+  letter-spacing: 2px;
+  text-shadow: 2px 2px 5px rgba(0,0,0,0.15);
+}
+.brand-title::after {
+  content: "";
+  display: block;
+  width: 180px;
+  height: 4px;
+  margin: 12px auto 0;
+  background: linear-gradient(135deg, #0d47a1, #1976d2);
+  border-radius: 6px;
+}
+
+/* =======================
+   SECTION TITLES
+======================= */
+.section-title {
+  margin: 20px 0 12px;
+  padding: 10px 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 12px;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+.section-title:nth-of-type(1) { background: linear-gradient(135deg,#1e88e5,#42a5f5); }
+.section-title:nth-of-type(2) { background: linear-gradient(135deg,#8e24aa,#ba68c8); }
+.section-title:nth-of-type(3) { background: linear-gradient(135deg,#fbc02d,#ffee58); color:#333; }
+.section-title:nth-of-type(4) { background: linear-gradient(135deg,#00acc1,#26c6da); }
+.section-title:nth-of-type(5) { background: linear-gradient(135deg,#43a047,#66bb6a); }
+.section-title:nth-of-type(6) { background: linear-gradient(135deg,#e64a19,#ff7043); }
+.section-title:nth-of-type(7) { background: linear-gradient(135deg,#ff4081,#ff80ab); }
+
+/* =======================
+   REPORT TABLE (COLORFUL BLUE)
+======================= */
+.report-table {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 4px 25px rgba(0,0,0,0.08);
+  font-size: 14px;
+}
+
+.report-table thead {
+  background: linear-gradient(135deg, #1e88e5, #42a5f5);
+  color: #fff;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.report-table thead th {
+  padding: 14px 12px;
+  border-right: 1px solid rgba(255,255,255,0.3);
+}
+.report-table thead th:last-child {
+  border-right: none;
+}
+
+.report-table tbody tr:nth-child(odd) {
+  background: #f8f9fa;
+}
+.report-table tbody tr:nth-child(even) {
+  background: #eef5fb;
+}
+
+/* remove hover effect */
+.report-table tbody tr:hover {
+  transform: none;
+  background: inherit;
+  box-shadow: none;
+}
+
+/* =======================
+   PENDING / PARTIAL TABLE (SAFE COLORS)
+======================= */
+.pending-table {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 4px 25px rgba(0,0,0,0.08);
+  font-size: 14px;
+}
+
+.pending-table thead {
+  background: #43a047; /* green header */
+  color: #fff;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pending-table thead th {
+  padding: 14px 12px;
+  border-right: 1px solid rgba(255,255,255,0.3);
+}
+.pending-table thead th:last-child {
+  border-right: none;
+}
+
+.pending-table tbody tr:nth-child(odd) {
+  background: #e8f5e9; /* light green */
+}
+.pending-table tbody tr:nth-child(even) {
+  background: #c8e6c9; /* darker green */
+}
+
+/* hover effect for pending table */
+.pending-table tbody tr:hover {
+  background: #a5d6a7;
+  transform: none;
+  box-shadow: none;
+}
+
+/* =======================
+   TOTAL / INFO ROW
+======================= */
+.table-info td {
+  background: linear-gradient(135deg, #90caf9, #42a5f5) !important;
+  color: #fff;
+  font-weight: 800;
+  text-align: right;
+  border-radius: 10px;
+}
+
+/* =======================
+   IMPORTANT CELLS
+======================= */
+.fw-bold {
+  font-weight: 700 !important;
+  background: rgba(30, 136, 229, 0.1);
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+/* =======================
+   BADGES FOR PENDING / PARTIAL ONLY
+======================= */
+.pending-badge {
+  background: #e53935; /* Red */
+  color: #fff;
+  border-radius: 12px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.partial-badge {
+  background: #fdd835; /* Yellow */
+  color: #333;
+  border-radius: 12px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* =======================
+   INPUTS
+======================= */
+.form-control-sm {
+  border-radius: 12px;
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.form-control-sm:focus {
+  border-color: #1976d2;
+  background: #e3f2fd;
+  box-shadow: 0 0 0 0.2rem rgba(25,118,210,.25);
+}
+
+/* =======================
+   BUTTONS
+======================= */
+.btn-sm {
+  border-radius: 25px;
+  padding: 6px 18px;
+  font-weight: 600;
+}
+.btn-sm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(25, 118, 210, 0.3);
+}
+
+/* =======================
+   PDF MODE
+======================= */
+.pdf-mode {
+  width: 1200px !important;
+  max-width: 1200px !important;
+}
+.pdf-mode * {
+  box-sizing: border-box !important;
+}
+
+.small-cell{
+  font-size:12px;
+  white-space:nowrap;   /* ek line */
+}
+
+/* ===== ULTRA COMPACT TABLE ===== */
+.compact-table{
+  font-size:13px;
+}
+
+.compact-table th,
+.compact-table td{
+  padding:3px 6px !important;
+  white-space:nowrap;
+  vertical-align:middle;
+}
+
+.compact-table thead th{
+  font-size:10px;
+}
+
+/* MOBILE FIXES */
+@media (max-width: 768px) {
+
+  .table td,
+  .table th {
+    white-space: nowrap;
+    font-size: 12px;
+    padding: 4px;
+  }
+
+  .form-control-sm {
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  h3, h4, h5, h6 {
+    text-align: center;
+  }
+
+  .section-title {
+    text-align: center;
+    font-size: 14px;
+  }
+
+}
+
+/* EXTRA SMALL PHONES */
+@media (max-width: 480px) {
+
+  .table td,
+  .table th {
+    font-size: 11px;
+  }
+
+}
+
+@media (min-width: 992px) {
+  .table td,
+  .table th {
+    white-space: normal;
+  }
+}
