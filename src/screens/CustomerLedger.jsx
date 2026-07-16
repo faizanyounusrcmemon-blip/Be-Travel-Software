@@ -318,7 +318,7 @@ export default function CustomerLedger({ onNavigate }) {
 
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(16);
-    pdf.text("MAKKI MADNI TRAVEL & TOURS", w / 2, 15, { align: "center" });
+    pdf.text("BE TRAVEL & TOURS", w / 2, 15, { align: "center" });
     pdf.setFontSize(10);
     pdf.text("Customer Ledger Statement", w / 2, 22, { align: "center" });
 
