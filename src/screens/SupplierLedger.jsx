@@ -391,7 +391,7 @@ export default function SupplierLedger({ onNavigate }) {
           pdf.rect(0, 0, pageWidth, 20, "F");
           pdf.setTextColor(255, 255, 255);
           pdf.setFontSize(16);
-          pdf.text("MAKKI MADNI TRAVEL & TOURS", pageWidth / 2, 10, { align: "center" });
+          pdf.text("BE TRAVEL & TOURS", pageWidth / 2, 10, { align: "center" });
           pdf.setFontSize(10);
           pdf.text("Supplier Ledger Statement", pageWidth / 2, 16, { align: "center" });
 
@@ -441,7 +441,7 @@ export default function SupplierLedger({ onNavigate }) {
         const supplierName = supplierRow?.supplier_name || "Supplier";
 
         const headerInfo = [
-          ["MAKKI MADNI TRAVEL & TOURS"],
+          ["BE TRAVEL & TOURS"],
           ["SUPPLIER LEDGER STATEMENT"],
           [""],
           ["Supplier Name:", supplierName.toUpperCase(), "", "Printed Date:", formatDate(today)],
