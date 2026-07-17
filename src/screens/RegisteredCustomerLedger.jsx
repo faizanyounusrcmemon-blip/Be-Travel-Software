@@ -427,7 +427,7 @@ export default function RegisteredCustomerLedger({ onNavigate }) {
           pdf.setTextColor(255, 255, 255);
           pdf.setFont("helvetica", "bold");
           pdf.setFontSize(16);
-          pdf.text("MAKKI MADNI TRAVEL & TOURS", pageWidth / 2, 12, { align: "center" });
+          pdf.text("BE TRAVEL & TOURS", pageWidth / 2, 12, { align: "center" });
 
           pdf.setFont("helvetica", "normal");
           pdf.setFontSize(9);
@@ -527,7 +527,7 @@ export default function RegisteredCustomerLedger({ onNavigate }) {
       try {
         // Prepare Metadata / Title Rows
         const headerInfo = [
-          ["MAKKI MADNI TRAVEL & TOURS"],
+          ["BE TRAVEL & TOURS"],
           ["REGISTERED CUSTOMER FINANCIAL LEDGER"],
           [""],
           ["Customer Name:", customerName.toUpperCase(), "", "Printed Date:", getRowDate({ date: today })],
