@@ -70,29 +70,30 @@ export default function SupplierLedger({ onNavigate }) {
   const [snapshotDate, setSnapshotDate] = useState(null);
   const [openingBalance, setOpeningBalance] = useState(0);
 
-  /* =========================
-     LOAD PENDING / PARTIAL
-  ========================== */
-  const loadPendingAlways = async () => {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/supplier-ledger/pending`);
-      const d = await res.json();
-      if (d.success) {
-        const clean = (d.pending || [])
-          .map(p => ({
-            ...p,
-            pending_amount: normalizeZero(p.pending_amount),
-            total_purchase: normalizeZero(p.total_purchase),
-            total_paid: normalizeZero(p.total_paid)
-          }))
-          .filter(p => p.status !== "PAID")
-          .sort((a, b) => b.pending_amount - a.pending_amount);
-        setPending(clean);
-      }
-    } catch (e) {
-      console.error("Pending load error:", e);
+/* =========================
+   LOAD PENDING / PARTIAL
+========================== */
+const loadPendingAlways = async () => {
+  try {
+    const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/supplier-ledger/pending`);
+    const d = await res.json();
+    if (d.success) {
+      const clean = (d.pending || [])
+        .map(p => ({
+          ...p,
+          pending_amount: normalizeZero(p.pending_amount),
+          total_purchase: normalizeZero(p.total_purchase),
+          total_paid: normalizeZero(p.total_paid)
+        }))
+        // Filter handles zero-check cleanly for both unpaid purchases & opening balance entries
+        .filter(p => p.status !== "PAID" || Math.abs(p.pending_amount) > 0.5)
+        .sort((a, b) => b.pending_amount - a.pending_amount);
+      setPending(clean);
     }
-  };
+  } catch (e) {
+    console.error("Pending load error:", e);
+  }
+};
 
   /* =========================
      LOAD LEDGER
