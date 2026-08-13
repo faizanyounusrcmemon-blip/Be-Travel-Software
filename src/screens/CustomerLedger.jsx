@@ -66,10 +66,26 @@ export default function CustomerLedger({ onNavigate }) {
   const [amountDisp, setAmountDisp] = useState("");
   const [date, setDate] = useState(today);
   const [type, setType] = useState("payment");
-  const [method, setMethod] = useState("Bank");
+  const [method, setMethod] = useState("Cash");
   const [saving, setSaving] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState("");
+  const [bankProfiles, setBankProfiles] = useState([]);
+  const [selectedBankProfile, setSelectedBankProfile] = useState("");
   const pdfRef = useRef(null);
+
+  /* =========================
+     LOAD BANK PROFILES
+  ========================== */
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/bank-ledger/profiles`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setBankProfiles(data.profiles || []);
+        }
+      })
+      .catch((err) => console.error("Error loading bank profiles:", err));
+  }, []);
 
   /* =========================
      LOAD PENDING LIST
@@ -86,7 +102,9 @@ export default function CustomerLedger({ onNavigate }) {
     }
   };
 
-  useEffect(() => { loadPending(); }, []);
+  useEffect(() => {
+    loadPending();
+  }, []);
 
   /* =========================
      LOAD LEDGER
@@ -125,12 +143,12 @@ export default function CustomerLedger({ onNavigate }) {
       }
 
       setRows(d.rows || []);
-      const pendingItem = pending.find(x => x.ref_no === r);
+      const pendingItem = pending.find((x) => x.ref_no === r);
       const currentStatus = pendingItem?.payment_status || "CLEARED";
       setPaymentStatus(currentStatus);
 
       let customerName = "Unknown Customer";
-      const customerRow = (d.rows || []).find(x => x.id === "CUSTOMER");
+      const customerRow = (d.rows || []).find((x) => x.id === "CUSTOMER");
       if (customerRow?.description) {
         customerName = customerRow.description;
       }
@@ -174,63 +192,68 @@ export default function CustomerLedger({ onNavigate }) {
     }
   };
 
-  /* =========================
-     SAVE ENTRY
-  ========================== */
-  const saveEntry = async () => {
-    if (!refNo) {
-      return Swal.fire({ width: "300px", icon: "warning", text: "Ref No required" });
-    }
-    if (!amountRaw || amountRaw <= 0) {
-      return Swal.fire({ width: "300px", icon: "warning", text: "Amount required" });
-    }
-    if (!date) {
-      return Swal.fire({ width: "300px", icon: "warning", text: "Date required" });
-    }
+/* =========================
+   SAVE ENTRY
+========================== */
+const saveEntry = async () => {
+  if (!refNo) {
+    return Swal.fire({ width: "300px", icon: "warning", text: "Ref No required" });
+  }
+  if (!amountRaw || amountRaw <= 0) {
+    return Swal.fire({ width: "300px", icon: "warning", text: "Amount required" });
+  }
+  if (!date) {
+    return Swal.fire({ width: "300px", icon: "warning", text: "Date required" });
+  }
+  if (method === "Bank" && !selectedBankProfile) {
+    return Swal.fire({ width: "300px", icon: "warning", text: "Please select a Bank Profile" });
+  }
 
-    setSaving(true);
-    Swal.fire({
-      width: "260px",
-      title: "Saving...",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
+  setSaving(true);
+  Swal.fire({
+    width: "260px",
+    title: "Saving...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  try {
+    const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/customer-ledger/payment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref_no: refNo,
+        amount: Number(amountRaw),
+        payment_date: date,
+        payment_method: method,
+        bank_profile_id: method === "Bank" ? selectedBankProfile : null, // 👈 Fix: bank_profile_id Send kar rahe hain
+        type
+      }),
     });
 
-    try {
-      const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/customer-ledger/payment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ref_no: refNo,
-          amount: Number(amountRaw),
-          payment_date: date,
-          payment_method: method,
-          type
-        }),
-      });
+    const d = await r.json();
+    Swal.close();
 
-      const d = await r.json();
-      Swal.close();
+    if (!d.success) {
+      Swal.fire({ width: "300px", icon: "error", text: d.error || "Save failed" });
+    } else {
+      setAmountRaw(0);
+      setAmountDisp("");
+      setDate(today);
+      setSelectedBankProfile("");
 
-      if (!d.success) {
-        Swal.fire({ width: "300px", icon: "error", text: d.error || "Save failed" });
-      } else {
-        setAmountRaw(0);
-        setAmountDisp("");
-        setDate(today);
+      await loadLedger(refNo);
+      await loadPending();
 
-        await loadLedger(refNo);
-        await loadPending();
-
-        Swal.fire({ width: "280px", icon: "success", text: "Entry Saved Successfully" });
-      }
-    } catch (err) {
-      Swal.close();
-      Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
-    } finally {
-      setSaving(false);
+      Swal.fire({ width: "280px", icon: "success", text: "Entry Saved Successfully" });
     }
-  };
+  } catch (err) {
+    Swal.close();
+    Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
+  } finally {
+    setSaving(false);
+  }
+};
 
   const askPassword = async (title = "Enter Password") => {
     const { value } = await Swal.fire({
@@ -358,10 +381,30 @@ export default function CustomerLedger({ onNavigate }) {
             </select>
           </div>
           <div>
-            <label class="fw-bold mb-1">Payment Method</label>
+            <label class="fw-bold mb-1">Payment Method / Bank</label>
             <select id="swal-edit-method" class="form-select form-select-sm">
-              <option value="Bank" ${row.description?.includes("Bank") ? "selected" : ""}>Bank</option>
-              <option value="Cash" ${row.description?.includes("Cash") ? "selected" : ""}>Cash</option>
+              <!-- Cash Option -->
+              <option value="Cash" ${!row.bank_profile_id && (row.description?.includes("Cash") || !row.description?.includes("Bank")) ? "selected" : ""}>
+                💵 Cash
+              </option>
+
+              <!-- Bank Profiles List -->
+              ${
+                bankProfiles.length > 0
+                  ? bankProfiles
+                      .map(
+                        (p) => `
+                        <option 
+                          value="Bank_${p.id}" 
+                          ${row.bank_profile_id == p.id ? "selected" : ""}
+                        >
+                          🏦 ${p.bank_name} (${p.account_number})
+                        </option>
+                      `
+                      )
+                      .join("")
+                  : `<option disabled>No Bank Profiles Found</option>`
+              }
             </select>
           </div>
           <div>
@@ -397,7 +440,7 @@ export default function CustomerLedger({ onNavigate }) {
         const amount = document.getElementById("swal-edit-amount").value;
         const payment_date = document.getElementById("swal-edit-date").value;
         const type = document.getElementById("swal-edit-type").value;
-        const payment_method = document.getElementById("swal-edit-method").value;
+        const selectedVal = document.getElementById("swal-edit-method").value;
         const password = document.getElementById("swal-edit-pass").value.trim();
 
         if (!amount || Number(amount) <= 0) {
@@ -413,11 +456,20 @@ export default function CustomerLedger({ onNavigate }) {
           return false;
         }
 
+        let payment_method = "Cash";
+        let bank_profile_id = null;
+
+        if (selectedVal.startsWith("Bank_")) {
+          payment_method = "Bank";
+          bank_profile_id = selectedVal.split("_")[1];
+        }
+
         return {
           amount: Number(amount),
           payment_date,
           type,
           payment_method,
+          bank_profile_id,
           password
         };
       }
@@ -475,7 +527,7 @@ export default function CustomerLedger({ onNavigate }) {
     pdf.addImage(img, "PNG", 10, 30, 190, (canvas.height * 190) / canvas.width);
 
     let customerName = "Customer";
-    const customerRow = rows.find(r => r.id === "CUSTOMER");
+    const customerRow = rows.find((r) => r.id === "CUSTOMER");
     if (customerRow && customerRow.description) {
       customerName = customerRow.description
         .replace(/[^a-zA-Z0-9 ]/g, "")
@@ -571,7 +623,7 @@ export default function CustomerLedger({ onNavigate }) {
             <div className="card-header bg-light fw-bold text-secondary">📥 Add Payment / Adjustment Receipt</div>
             <div className="card-body">
               <div className="row g-2 mb-3">
-                <div className="col-md-3">
+                <div className="col-md-2">
                   <label className="form-label small text-muted mb-1">Date</label>
                   <input type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
                   <span className="text-primary fw-bold d-block mt-1" style={{ fontSize: "0.75rem" }}>
@@ -598,20 +650,37 @@ export default function CustomerLedger({ onNavigate }) {
                     </div>
                   )}
                 </div>
-                <div className="col-md-3">
+                <div className="col-md-2">
                   <label className="form-label small text-muted mb-1">Type</label>
                   <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
                     <option value="payment">Payment</option>
                     <option value="adjustment">Adjustment</option>
                   </select>
                 </div>
-                <div className="col-md-3">
-                  <label className="form-label small text-muted mb-1">Payment Method</label>
+                <div className="col-md-2">
+                  <label className="form-label small text-muted mb-1">Method</label>
                   <select className="form-select" value={method} onChange={(e) => setMethod(e.target.value)}>
-                    <option>Bank</option>
-                    <option>Cash</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Bank">Bank</option>
                   </select>
                 </div>
+                {method === "Bank" && (
+                  <div className="col-md-3">
+                    <label className="form-label small text-muted mb-1">Select Bank Account</label>
+                    <select
+                      className="form-select fw-bold"
+                      value={selectedBankProfile}
+                      onChange={(e) => setSelectedBankProfile(e.target.value)}
+                    >
+                      <option value="">-- Choose Bank --</option>
+                      {bankProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.bank_name} ({p.account_number})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <button className="btn btn-success px-4 py-2 fw-bold" disabled={saving || !refNo} onClick={saveEntry}>
                 {saving ? "Saving..." : "💾 Save Transaction"}

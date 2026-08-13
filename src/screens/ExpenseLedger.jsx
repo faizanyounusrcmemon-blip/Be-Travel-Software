@@ -11,19 +11,21 @@ const fmtDate = (val) => {
   const month = d.toLocaleString("en-US", { month: "short" });
   const year = d.getFullYear();
 
-  return `${day}/${month}/${year}`; // 👉 01/Feb/2026
+  return `${day}/${month}/${year}`;
 };
 
 export default function ExpenseLedger({ onNavigate }) {
   const today = new Date().toISOString().slice(0, 10);
 
   const [rows, setRows] = useState([]);
+  const [bankProfiles, setBankProfiles] = useState([]);
 
   // ADD EXPENSE STATES
   const [date, setDate] = useState(today);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("Cash");
+  const [selectedBankProfile, setSelectedBankProfile] = useState("");
   const [remarks, setRemarks] = useState("");
 
   // FILTER STATES
@@ -31,246 +33,387 @@ export default function ExpenseLedger({ onNavigate }) {
   const [toDate, setToDate] = useState("");
   const [search, setSearch] = useState("");
 
-  /* ================= LOAD ================= */
+  /* ================= LOAD DATA & BANK PROFILES ================= */
   const load = async () => {
-    const r = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger`
-    );
-    const d = await r.json();
-    if (d.success) setRows(d.rows || []);
+    try {
+      const r = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger`
+      );
+      const d = await r.json();
+      if (d.success) setRows(d.rows || []);
+    } catch (err) {
+      console.error("Error loading expenses:", err);
+    }
+  };
+
+  const loadBankProfiles = async () => {
+    try {
+      const r = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/bank-ledger/profiles`
+      );
+      const d = await r.json();
+      if (d.success) setBankProfiles(d.profiles || []);
+    } catch (err) {
+      console.error("Error loading bank profiles:", err);
+    }
   };
 
   useEffect(() => {
     load();
+    loadBankProfiles();
   }, []);
 
-/* ================= PASSWORD POPUP (DYNAMIC) ================= */
-const askPassword = async (title = "Enter Password") => {
-  const { value } = await Swal.fire({
-    width: "300px",
-    html: `
-      <div style="text-align:left;font-size:13px">
-        <b>${title}</b>
-
-        <div style="position:relative;margin-top:10px">
-          <input 
-            id="swal-pass" 
-            type="password" 
-            class="swal2-input"
-            style="height:34px;font-size:13px;width:100%;margin:0;padding-right:40px"
-            placeholder="Enter password"
-          />
-
-          <span id="toggle-pass" style="
-            position:absolute;
-            right:12px;
-            top:50%;
-            transform:translateY(-50%);
-            cursor:pointer;
-            user-select:none;
-            font-size:16px;
-          ">👁</span>
+  /* ================= PASSWORD POPUP ================= */
+  const askPassword = async (title = "Enter Password") => {
+    const { value } = await Swal.fire({
+      width: "300px",
+      html: `
+        <div style="text-align:left;font-size:13px">
+          <b>${title}</b>
+          <div style="position:relative;margin-top:10px">
+            <input 
+              id="swal-pass" 
+              type="password" 
+              class="swal2-input"
+              style="height:34px;font-size:13px;width:100%;margin:0;padding-right:40px"
+              placeholder="Enter password"
+            />
+            <span id="toggle-pass" style="
+              position:absolute;
+              right:12px;
+              top:50%;
+              transform:translateY(-50%);
+              cursor:pointer;
+              user-select:none;
+              font-size:16px;
+            ">👁</span>
+          </div>
         </div>
-      </div>
-    `,
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Confirm",
+      focusConfirm: false,
 
-    showCancelButton: true,
-    confirmButtonText: "Delete",
-    focusConfirm: false,
-
-    preConfirm: () => {
-      const input = document.getElementById("swal-pass");
-      const val = input.value.trim();
-
-      // Khaali input check karega
-      if (!val) {
-        Swal.showValidationMessage("Password required");
-        return false;
-      }
-
-      // ❌ LOCAL HARDCODED "786" CHECK REMOVED
-      // Ab value direct return hogi aur match/mismatch backend handle karega
-      return val;
-    },
-
-    didOpen: () => {
-      const input = document.getElementById("swal-pass");
-      const toggle = document.getElementById("toggle-pass");
-
-      let show = false;
-
-      // 👁 SHOW / HIDE TOGGLE
-      toggle.onclick = () => {
-        show = !show;
-        input.type = show ? "text" : "password";
-        toggle.textContent = show ? "🙈" : "👁";
-      };
-
-      // 🔥 AUTO FOCUS
-      setTimeout(() => input.focus(), 100);
-
-      // 🔥 ENTER KEY SUPPORT
-      const handleEnter = (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          const confirmBtn = document.querySelector(".swal2-confirm");
-          if (confirmBtn) confirmBtn.click();
+      preConfirm: () => {
+        const input = document.getElementById("swal-pass");
+        const val = input.value.trim();
+        if (!val) {
+          Swal.showValidationMessage("Password required");
+          return false;
         }
-      };
+        return val;
+      },
 
-      document.addEventListener("keydown", handleEnter);
+      didOpen: () => {
+        const input = document.getElementById("swal-pass");
+        const toggle = document.getElementById("toggle-pass");
+        let show = false;
 
-      // Cleanup listener when popup closes
-      Swal.getPopup().addEventListener("remove", () => {
-        document.removeEventListener("keydown", handleEnter);
+        toggle.onclick = () => {
+          show = !show;
+          input.type = show ? "text" : "password";
+          toggle.textContent = show ? "🙈" : "👁";
+        };
+
+        setTimeout(() => input.focus(), 100);
+
+        const handleEnter = (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const confirmBtn = document.querySelector(".swal2-confirm");
+            if (confirmBtn) confirmBtn.click();
+          }
+        };
+
+        document.addEventListener("keydown", handleEnter);
+
+        Swal.getPopup().addEventListener("remove", () => {
+          document.removeEventListener("keydown", handleEnter);
+        });
+      },
+    });
+
+    return value;
+  };
+
+  /* ================= SAVE ================= */
+  const save = async () => {
+    if (!date || !title || !amount) {
+      return Swal.fire({
+        width: "300px",
+        icon: "warning",
+        text: "Missing required fields",
       });
     }
-  });
 
-  return value;
-};
+    if (method === "Bank" && !selectedBankProfile) {
+      return Swal.fire({
+        width: "300px",
+        icon: "warning",
+        text: "Please select a Bank Profile",
+      });
+    }
 
+    Swal.fire({
+      width: "260px",
+      title: "Saving...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
 
-/* ================= SAVE ================= */
-const save = async () => {
+    try {
+      const r = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger/add`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            expense_date: date,
+            title,
+            amount: amount.replace(/,/g, ""),
+            payment_method: method,
+            bank_profile_id: method === "Bank" ? selectedBankProfile : null,
+            remarks,
+          }),
+        }
+      );
 
-  if (!date || !title || !amount) {
-    return Swal.fire({
+      const d = await r.json();
+
+      Swal.close();
+
+      if (d.success) {
+        setTitle("");
+        setAmount("");
+        setRemarks("");
+        setSelectedBankProfile("");
+
+        load();
+
+        Swal.fire({
+          width: "280px",
+          icon: "success",
+          text: "Expense Saved Successfully",
+        });
+      } else {
+        Swal.fire({
+          width: "300px",
+          icon: "error",
+          text: d.error || "Save failed",
+        });
+      }
+    } catch (err) {
+      Swal.close();
+      Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: "Network Error",
+      });
+    }
+  };
+
+  /* ================= EDIT EXPENSE ================= */
+  const editExpense = async (row) => {
+    const rawDate = row.expense_date ? row.expense_date.slice(0, 10) : today;
+
+    // Bank profiles dynamic options for select html
+    const bankOptions = bankProfiles
+      .map(
+        (p) =>
+          `<option value="${p.id}" ${
+            row.bank_profile_id == p.id ? "selected" : ""
+          }>${p.bank_name} (${p.account_number})</option>`
+      )
+      .join("");
+
+    const { value: formValues } = await Swal.fire({
+      title: "✏️ Edit Expense",
+      width: "420px",
+      html: `
+        <div style="text-align:left; font-size:13px;" className="fw-bold">
+          <label style="margin-top:8px">Date:</label>
+          <input id="edit-date" type="date" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${rawDate}">
+          
+          <label>Title:</label>
+          <input id="edit-title" type="text" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${row.title || ""}">
+          
+          <label>Amount:</label>
+          <input id="edit-amount" type="number" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${row.amount || ""}">
+          
+          <label>Payment Method:</label>
+          <select id="edit-method" class="swal2-select" style="height:35px;margin:5px 0 10px 0;width:100%">
+            <option value="Cash" ${row.payment_method === "Cash" ? "selected" : ""}>Cash</option>
+            <option value="Bank" ${row.payment_method === "Bank" ? "selected" : ""}>Bank</option>
+          </select>
+
+          <div id="edit-bank-box" style="display:${row.payment_method === "Bank" ? "block" : "none"}">
+            <label>Select Bank:</label>
+            <select id="edit-bank-id" class="swal2-select" style="height:35px;margin:5px 0 10px 0;width:100%">
+              <option value="">-- Choose Bank --</option>
+              ${bankOptions}
+            </select>
+          </div>
+
+          <label>Remarks:</label>
+          <input id="edit-remarks" type="text" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${row.remarks || ""}">
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Next ➡",
+      focusConfirm: false,
+
+      didOpen: () => {
+        const methodEl = document.getElementById("edit-method");
+        const bankBox = document.getElementById("edit-bank-box");
+
+        methodEl.addEventListener("change", (e) => {
+          bankBox.style.display = e.target.value === "Bank" ? "block" : "none";
+        });
+      },
+
+      preConfirm: () => {
+        const expense_date = document.getElementById("edit-date").value;
+        const title = document.getElementById("edit-title").value.trim();
+        const amount = document.getElementById("edit-amount").value;
+        const payment_method = document.getElementById("edit-method").value;
+        const bank_profile_id = document.getElementById("edit-bank-id").value;
+        const remarks = document.getElementById("edit-remarks").value.trim();
+
+        if (!expense_date || !title || !amount) {
+          Swal.showValidationMessage("Please fill required fields");
+          return false;
+        }
+
+        if (payment_method === "Bank" && !bank_profile_id) {
+          Swal.showValidationMessage("Please select a bank profile");
+          return false;
+        }
+
+        return {
+          expense_date,
+          title,
+          amount,
+          payment_method,
+          bank_profile_id: payment_method === "Bank" ? bank_profile_id : null,
+          remarks,
+        };
+      },
+    });
+
+    if (!formValues) return;
+
+    // Ask Password for Edit
+    const pass = await askPassword("Enter Password to Save Changes");
+    if (!pass) return;
+
+    Swal.fire({
+      width: "260px",
+      title: "Updating...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+      const r = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger/update/${row.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...formValues,
+            password: pass,
+          }),
+        }
+      );
+
+      const d = await r.json();
+      Swal.close();
+
+      if (d.success) {
+        load();
+
+        Swal.fire({
+          width: "280px",
+          icon: "success",
+          text: "Expense Updated Successfully",
+        });
+      } else {
+        Swal.fire({
+          width: "300px",
+          icon: "error",
+          text: d.error || "Update failed",
+        });
+      }
+    } catch (err) {
+      Swal.close();
+      Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: "Network Error",
+      });
+    }
+  };
+
+  /* ================= DELETE ================= */
+  const del = async (id) => {
+    const confirmDelete = await Swal.fire({
       width: "300px",
       icon: "warning",
-      text: "Missing fields"
+      text: "Delete this expense?",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
     });
-  }
 
-  Swal.fire({
-    width: "260px",
-    title: "Saving...",
-    allowOutsideClick: false,
-    didOpen: () => Swal.showLoading()
-  });
+    if (!confirmDelete.isConfirmed) return;
 
-  try {
+    const pass = await askPassword("Enter Delete Password");
 
-    const r = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger/add`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expense_date: date,
-          title,
-          amount: amount.replace(/,/g, ""),
-          payment_method: method,
-          remarks,
-        }),
+    if (!pass) return;
+
+    Swal.fire({
+      width: "260px",
+      title: "Deleting...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+      const r = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger/delete/${id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: pass }),
+        }
+      );
+
+      const d = await r.json();
+      Swal.close();
+
+      if (d.success) {
+        load();
+
+        Swal.fire({
+          width: "280px",
+          icon: "success",
+          text: "Expense Deleted Successfully",
+        });
+      } else {
+        Swal.fire({
+          width: "300px",
+          icon: "error",
+          text: d.error || "Delete failed",
+        });
       }
-    );
-
-    const d = await r.json();
-
-    Swal.close();
-
-    if (d.success) {
-
-      setTitle("");
-      setAmount("");
-      setRemarks("");
-
-      load();
-
-      Swal.fire({
-        width: "280px",
-        icon: "success",
-        text: "Expense Saved Successfully"
-      });
-
-    } else {
-
+    } catch (err) {
+      Swal.close();
       Swal.fire({
         width: "300px",
         icon: "error",
-        text: d.error || "Save failed"
+        text: "Network Error",
       });
     }
-
-  } catch (err) {
-
-    Swal.close();
-
-    Swal.fire({
-      width: "300px",
-      icon: "error",
-      text: "Network Error"
-    });
-  }
-};
-
-
-/* ======================== DELETE ======================== */
-const del = async (id) => {
-
-  const confirmDelete = await Swal.fire({
-    width: "300px",
-    icon: "warning",
-    text: "Delete this expense?",
-    showCancelButton: true,
-    confirmButtonText: "Delete"
-  });
-
-  if (!confirmDelete.isConfirmed) return;
-
-  // ✅ PASSWORD POPUP (Ab yeh direct user input bina hardcoding ke return karega)
-  const pass = await askPassword("Enter Delete Password");
-
-  if (!pass) return;
-
-  Swal.fire({
-    width: "260px",
-    title: "Deleting...",
-    allowOutsideClick: false,
-    didOpen: () => Swal.showLoading()
-  });
-
-  try {
-    const r = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger/delete/${id}`,
-      {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pass }),
-      }
-    );
-
-    const d = await r.json();
-    Swal.close();
-
-    if (d.success) {
-      load();
-
-      Swal.fire({
-        width: "280px",
-        icon: "success",
-        text: "Expense Deleted Successfully"
-      });
-
-    } else {
-      // Wrong password ka catch backend se direct yahan handler me display hoga
-      Swal.fire({
-        width: "300px",
-        icon: "error",
-        text: d.error || "Delete failed"
-      });
-    }
-
-  } catch (err) {
-    Swal.close();
-    Swal.fire({
-      width: "300px",
-      icon: "error",
-      text: "Network Error"
-    });
-  }
-};
+  };
 
   /* ================= FILTER ================= */
   const filteredRows = rows.filter((r) => {
@@ -291,7 +434,6 @@ const del = async (id) => {
 
   return (
     <div className="container p-3">
-
       {/* HEADER */}
       <div
         className="p-3 mb-3 rounded text-white"
@@ -317,17 +459,27 @@ const del = async (id) => {
           <h6 className="fw-bold text-primary mb-2">➕ Add Expense</h6>
           <div className="row g-2 small fw-bold">
             <div className="col-md-2">
-              <input type="date" className="form-control form-control-sm"
-                value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="col-md-3">
-              <input className="form-control form-control-sm"
-                placeholder="Title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)} />
+              <label className="text-muted small mb-1">Date</label>
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
             </div>
             <div className="col-md-2">
-              <input className="form-control form-control-sm"
+              <label className="text-muted small mb-1">Title</label>
+              <input
+                className="form-control form-control-sm"
+                placeholder="Expense Title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div className="col-md-2">
+              <label className="text-muted small mb-1">Amount</label>
+              <input
+                className="form-control form-control-sm"
                 placeholder="Amount"
                 value={amount}
                 onChange={(e) =>
@@ -336,24 +488,57 @@ const del = async (id) => {
                       .replace(/,/g, "")
                       .replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                   )
-                } />
+                }
+              />
             </div>
             <div className="col-md-2">
-              <select className="form-control form-control-sm"
+              <label className="text-muted small mb-1">Method</label>
+              <select
+                className="form-control form-control-sm"
                 value={method}
-                onChange={(e) => setMethod(e.target.value)}>
-                <option>Cash</option>
-                <option>Bank</option>
+                onChange={(e) => setMethod(e.target.value)}
+              >
+                <option value="Cash">Cash</option>
+                <option value="Bank">Bank</option>
               </select>
             </div>
-            <div className="col-md-2">
-              <input className="form-control form-control-sm"
+
+            {/* DYNAMIC BANK PROFILE DROPDOWN */}
+            {method === "Bank" && (
+              <div className="col-md-2">
+                <label className="text-muted small mb-1">
+                  Select Bank Account
+                </label>
+                <select
+                  className="form-control form-control-sm text-primary fw-bold"
+                  value={selectedBankProfile}
+                  onChange={(e) => setSelectedBankProfile(e.target.value)}
+                >
+                  <option value="">-- Choose Bank --</option>
+                  {bankProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.bank_name} ({p.account_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className={method === "Bank" ? "col-md-1" : "col-md-3"}>
+              <label className="text-muted small mb-1">Remarks</label>
+              <input
+                className="form-control form-control-sm"
                 placeholder="Remarks"
                 value={remarks}
-                onChange={(e) => setRemarks(e.target.value)} />
+                onChange={(e) => setRemarks(e.target.value)}
+              />
             </div>
-            <div className="col-md-1">
-              <button className="btn btn-success btn-sm w-100" onClick={save}>
+
+            <div className="col-md-1 d-flex align-items-end">
+              <button
+                className="btn btn-success btn-sm w-100 fw-bold"
+                onClick={save}
+              >
                 Save
               </button>
             </div>
@@ -367,18 +552,28 @@ const del = async (id) => {
           <h6 className="fw-bold text-info mb-2">🔍 Filters</h6>
           <div className="row g-2 small fw-bold">
             <div className="col-md-2">
-              <input type="date" className="form-control form-control-sm"
-                value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
             </div>
             <div className="col-md-2">
-              <input type="date" className="form-control form-control-sm"
-                value={toDate} onChange={(e) => setToDate(e.target.value)} />
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+              />
             </div>
             <div className="col-md-4">
-              <input className="form-control form-control-sm"
+              <input
+                className="form-control form-control-sm"
                 placeholder="Search title"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)} />
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
           </div>
         </div>
@@ -394,22 +589,38 @@ const del = async (id) => {
               <th>Amount</th>
               <th>Method</th>
               <th>Remarks</th>
-              <th></th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody className="small fw-bold">
             {filteredRows.map((r) => (
               <tr key={r.id}>
-                <td>{fmtDate(r.expense_date)}</td>
+                <td className="text-center">{fmtDate(r.expense_date)}</td>
                 <td>{r.title}</td>
                 <td className="text-end text-success">
                   {Number(r.amount).toLocaleString()}
                 </td>
-                <td>{r.payment_method}</td>
-                <td>{r.remarks}</td>
+                <td className="text-center">
+                  {r.payment_method === "Bank" && r.bank_name ? (
+                    <span className="badge bg-info text-dark">
+                      🏦 {r.bank_name}
+                    </span>
+                  ) : (
+                    <span className="badge bg-secondary">💵 Cash</span>
+                  )}
+                </td>
+                <td>{r.remarks || "-"}</td>
                 <td className="text-center">
                   <button
-                    className="btn btn-danger btn-sm"
+                    className="btn btn-warning btn-sm py-0 px-2 me-1"
+                    title="Edit"
+                    onClick={() => editExpense(r)}
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="btn btn-danger btn-sm py-0 px-2"
+                    title="Delete"
                     onClick={() => del(r.id)}
                   >
                     ❌

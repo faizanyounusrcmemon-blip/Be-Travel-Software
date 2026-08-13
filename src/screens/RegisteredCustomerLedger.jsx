@@ -70,7 +70,9 @@ export default function RegisteredCustomerLedger({ onNavigate }) {
   const [amountDisp, setAmountDisp] = useState("");
   const [date, setDate] = useState(getTodayInputDate());
   const [type, setType] = useState("payment");
-  const [method, setMethod] = useState("Bank");
+  const [method, setMethod] = useState("Cash");
+  const [bankProfiles, setBankProfiles] = useState([]);
+  const [selectedBankProfile, setSelectedBankProfile] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Dynamic Detail Modal States
@@ -80,19 +82,63 @@ export default function RegisteredCustomerLedger({ onNavigate }) {
   const [detailData, setDetailData] = useState(null);
 
   /* =========================
-     LOAD PENDING CUSTOMERS
+     LOAD BANK PROFILES
   ========================== */
-  const loadPending = async () => {
-    try {
-      const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/registered-ledger/pending/list`);
-      const d = await r.json();
-      if (d.success) {
-        setPending(d.rows || []);
-      }
-    } catch (e) {
-      console.error("Error loading pending registered users:", e);
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/bank-ledger/profiles`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setBankProfiles(data.profiles || []);
+        }
+      })
+      .catch((err) => console.error("Error loading bank profiles:", err));
+  }, []);
+
+/* =========================
+   FIXED: LOAD PENDING CUSTOMERS ONLY BY CODE
+========================== */
+const loadPending = async () => {
+  try {
+    const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/registered-ledger/pending/list`);
+    const d = await r.json();
+    if (d.success) {
+      const rawList = d.rows || [];
+      const uniqueCustomersMap = new Map();
+
+      rawList.forEach((item) => {
+        // Customer Code ko strict sanitize karke filter karna
+        const code = String(item.customer_code || "").trim().toUpperCase();
+
+        // Check: Agar Ref No ya Sale No galti se aaye (e.g. HOT-, PKG-, TIC-) toh usko filter out karein
+        const isIndividualInvoiceRef = /^(HOT-|PKG-|TIC-|VISA-|ZIY-|TRN-|CARD-|GRP-)/i.test(code);
+
+        if (!code || isIndividualInvoiceRef) return;
+
+        const bal = Number(item.remaining_balance || item.balance || 0);
+
+        if (!uniqueCustomersMap.has(code)) {
+          uniqueCustomersMap.set(code, {
+            customer_code: code,
+            customer_name: item.customer_name || "Registered Customer",
+            remaining_balance: bal,
+            payment_status: item.payment_status || (bal < 0 ? "EXTRA PAID" : "PENDING")
+          });
+        } else {
+          const existing = uniqueCustomersMap.get(code);
+          existing.remaining_balance += bal;
+          if (existing.remaining_balance < 0) {
+            existing.payment_status = "EXTRA PAID";
+          }
+        }
+      });
+
+      setPending(Array.from(uniqueCustomersMap.values()));
     }
-  };
+  } catch (e) {
+    console.error("Error loading pending registered users:", e);
+  }
+};
 
   useEffect(() => {
     loadPending();
@@ -299,11 +345,14 @@ const fetchSaleDetail = async (id, description) => {
     if (amountRaw <= 0) {
       return Swal.fire({ width: "300px", icon: "warning", text: "Please enter a valid amount" });
     }
+    if (method === "Bank" && !selectedBankProfile) {
+      return Swal.fire({ width: "300px", icon: "warning", text: "Please select a Bank Profile" });
+    }
 
     setSaving(true);
     Swal.fire({
       width: "250px",
-      title: "Saving Entry...",
+      title: "Saving Receipt...",
       allowOutsideClick: false,
       didOpen: () => Swal.showLoading()
     });
@@ -317,6 +366,7 @@ const fetchSaleDetail = async (id, description) => {
           amount: Number(amountRaw),
           payment_date: date || getTodayInputDate(),
           payment_method: method,
+          bank_profile_id: method === "Bank" ? selectedBankProfile : null,
           type
         }),
       });
@@ -328,6 +378,7 @@ const fetchSaleDetail = async (id, description) => {
         setAmountRaw(0);
         setAmountDisp("");
         setDate(getTodayInputDate());
+        setSelectedBankProfile("");
         await loadLedger(customerCode);
         await loadPending();
         Swal.fire({ width: "280px", icon: "success", text: "Transaction Saved Successfully!" });
@@ -427,7 +478,7 @@ const fetchSaleDetail = async (id, description) => {
   };
 
 /* =========================
-     EDIT ROW
+     EDIT ROW (FIXED WITH TYPE SELECTOR)
   ========================== */
   const editRow = async (row) => {
     if (String(row.id).startsWith("SALE-") || String(row.id).startsWith("TIC-") || String(row.id).startsWith("HOT-")) {
@@ -435,7 +486,7 @@ const fetchSaleDetail = async (id, description) => {
     }
 
     const formattedDate = toInputDate(row.date || row.payment_date) || getTodayInputDate();
-    const currentType = (row.type || "payment").toLowerCase();
+    const currentType = row.type || "payment";
 
     const { value: formValues } = await Swal.fire({
       width: "360px",
@@ -447,6 +498,14 @@ const fetchSaleDetail = async (id, description) => {
             <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${row.debit || row.credit || 0}" />
           </div>
           <div>
+            <label class="fw-bold mb-1">Transaction Type</label>
+            <select id="swal-edit-type" class="form-select form-select-sm">
+              <option value="payment" ${currentType === "payment" ? "selected" : ""}>payment</option>
+              <option value="adjustment" ${currentType === "adjustment" ? "selected" : ""}>adjustment</option>
+              <option value="opening_balance" ${currentType === "opening_balance" ? "selected" : ""}>🔑 opening_balance (Credit)</option>
+            </select>
+          </div>
+          <div>
             <label class="fw-bold mb-1">Receipt Date</label>
             <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDate}" />
             <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
@@ -454,18 +513,25 @@ const fetchSaleDetail = async (id, description) => {
             </div>
           </div>
           <div>
-            <label class="fw-bold mb-1">Transaction Type</label>
-            <select id="swal-edit-type" class="form-select form-select-sm">
-              <option value="payment" ${currentType.includes("payment") ? "selected" : ""}>Payment (Debit)</option>
-              <option value="adjustment" ${currentType.includes("adjustment") ? "selected" : ""}>Adjustment (Debit)</option>
-              <option value="opening_balance" ${currentType.includes("opening") ? "selected" : ""}>🔑 Opening Balance (Credit)</option>
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Payment Method</label>
+            <label class="fw-bold mb-1">Payment Method / Bank</label>
             <select id="swal-edit-method" class="form-select form-select-sm">
-              <option value="Bank" ${row.description?.includes("Bank") ? "selected" : ""}>Bank</option>
-              <option value="Cash" ${row.description?.includes("Cash") ? "selected" : ""}>Cash</option>
+              <option value="Cash" ${!row.bank_profile_id && (row.description?.includes("Cash") || !row.description?.includes("Bank")) ? "selected" : ""}>💵 Cash</option>
+              ${
+                bankProfiles.length > 0
+                  ? bankProfiles
+                      .map(
+                        (p) => `
+                        <option 
+                          value="Bank_${p.id}" 
+                          ${row.bank_profile_id == p.id ? "selected" : ""}
+                        >
+                          🏦 ${p.bank_name} (${p.account_number})
+                        </option>
+                      `
+                      )
+                      .join("")
+                  : `<option disabled>No Bank Profiles Found</option>`
+              }
             </select>
           </div>
           <div>
@@ -499,9 +565,9 @@ const fetchSaleDetail = async (id, description) => {
       },
       preConfirm: () => {
         const amount = document.getElementById("swal-edit-amount").value;
+        const selectedType = document.getElementById("swal-edit-type").value;
         const payment_date = document.getElementById("swal-edit-date").value;
-        const payment_method = document.getElementById("swal-edit-method").value;
-        const type = document.getElementById("swal-edit-type").value;
+        const selectedVal = document.getElementById("swal-edit-method").value;
         const password = document.getElementById("swal-edit-pass").value.trim();
 
         if (!amount || Number(amount) <= 0) {
@@ -517,12 +583,21 @@ const fetchSaleDetail = async (id, description) => {
           return false;
         }
 
+        let payment_method = "Cash";
+        let bank_profile_id = null;
+
+        if (selectedVal.startsWith("Bank_")) {
+          payment_method = "Bank";
+          bank_profile_id = selectedVal.split("_")[1];
+        }
+
         return {
           amount: Number(amount),
           payment_date,
           payment_method,
-          type,
-          password
+          bank_profile_id,
+          password,
+          type: selectedType
         };
       }
     });
@@ -616,8 +691,8 @@ const fetchSaleDetail = async (id, description) => {
           pdf.setFontSize(9);
           pdf.text("Date", 13, 60.5);
           pdf.text("Description", 35, 60.5);
-          pdf.text("Debit (Dr)", pageWidth - 80, 60.5, { align: "right" });
-          pdf.text("Credit (Cr)", pageWidth - 50, 60.5, { align: "right" });
+          pdf.text("Debit (-)", pageWidth - 80, 60.5, { align: "right" });
+          pdf.text("Credit (+)", pageWidth - 50, 60.5, { align: "right" });
           pdf.text("Balance", pageWidth - 14, 60.5, { align: "right" });
         };
 
@@ -689,7 +764,7 @@ const fetchSaleDetail = async (id, description) => {
           [""]
         ];
 
-        const tableHeaders = ["Date", "Description", "Debit (Dr)", "Credit (Cr)", "Balance"];
+        const tableHeaders = ["Date", "Description", "Debit (-)", "Credit (+)", "Balance"];
 
         const tableData = rows.map((r) => [
           getRowDate(r),
@@ -767,7 +842,6 @@ const fetchSaleDetail = async (id, description) => {
       detailData.total_amount ||
       detailData.total_amount_pkr ||
       detailData.credit ||
-      detailData.debit ||
       0
     );
   };
@@ -817,7 +891,11 @@ const fetchSaleDetail = async (id, description) => {
                       }}
                     >
                       <div className="d-flex justify-content-between align-items-start mb-1">
-                        <span className="badge bg-dark font-monospace" style={{ fontSize: "0.75rem" }}>{p.customer_code}</span>
+                        {/* Always displays unique Customer Code */}
+                        {/* Always displays strictly Customer Code */}
+<span className="badge bg-dark font-monospace" style={{ fontSize: "0.75rem" }}>
+  {p.customer_code}
+</span>
                         <span className={`badge py-0 px-1 ${
                           p.payment_status === "PENDING" ? "bg-danger" :
                           p.payment_status === "EXTRA PAID" ? "bg-success" : "bg-warning text-dark"
@@ -884,10 +962,10 @@ const fetchSaleDetail = async (id, description) => {
           </div>
 
           <div className={`card shadow-sm mb-3 ${!customerCode ? "opacity-50" : ""}`} style={{ pointerEvents: !customerCode ? "none" : "auto" }}>
-            <div className="card-header bg-dark text-white fw-bold">📥 Post New Payment / Entry</div>
+            <div className="card-header bg-dark text-white fw-bold">📥 Post New Payment / Receipt</div>
             <div className="card-body">
               <div className="row g-2 mb-3">
-                <div className="col-md-3">
+                <div className="col-md-2">
                   <label className="form-label small text-muted mb-1">Receipt Date</label>
                   <input type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
                   <span className="text-primary fw-bold d-block mt-1" style={{ fontSize: "0.75rem" }}>
@@ -914,21 +992,38 @@ const fetchSaleDetail = async (id, description) => {
                     </div>
                   )}
                 </div>
-                <div className="col-md-3">
+                <div className="col-md-2">
                   <label className="form-label small text-muted mb-1">Transaction Type</label>
                   <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
-                    <option value="payment">payment (Debit)</option>
-                    <option value="adjustment">adjustment (Debit)</option>
+                    <option value="payment">payment</option>
+                    <option value="adjustment">adjustment</option>
                     <option value="opening_balance">🔑 opening_balance (Credit)</option>
                   </select>
                 </div>
-                <div className="col-md-3">
+                <div className="col-md-2">
                   <label className="form-label small text-muted mb-1">Payment Method</label>
                   <select className="form-select" value={method} onChange={(e) => setMethod(e.target.value)}>
-                    <option value="Bank">Bank</option>
                     <option value="Cash">Cash</option>
+                    <option value="Bank">Bank</option>
                   </select>
                 </div>
+                {method === "Bank" && (
+                  <div className="col-md-3">
+                    <label className="form-label small text-muted mb-1">Select Bank Account</label>
+                    <select
+                      className="form-select fw-bold"
+                      value={selectedBankProfile}
+                      onChange={(e) => setSelectedBankProfile(e.target.value)}
+                    >
+                      <option value="">-- Choose Bank --</option>
+                      {bankProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.bank_name} ({p.account_number})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <button className="btn btn-success px-4 fw-bold" disabled={saving || !customerCode} onClick={saveEntry}>
                 {saving ? "Saving Entry..." : "💾 Save Entry"}

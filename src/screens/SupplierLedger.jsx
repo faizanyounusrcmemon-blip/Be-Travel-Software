@@ -19,7 +19,7 @@ const parseAmt = (v) => {
   return normalizeZero(Math.round(n || 0));
 };
 
-/* ================= DATE FORMATTER: DD/MMM/YYYY (e.g. 20/Jul/2026) ================= */
+/* ================= DATE FORMATTER: DD/MMM/YYYY ================= */
 const formatDate = (d) => {
   if (!d) return "-";
   const dt = new Date(d);
@@ -70,6 +70,24 @@ export default function SupplierLedger({ onNavigate }) {
   const [snapshotDate, setSnapshotDate] = useState(null);
   const [openingBalance, setOpeningBalance] = useState(0);
 
+  // Bank Profiles state
+  const [bankProfiles, setBankProfiles] = useState([]);
+  const [selectedBankProfile, setSelectedBankProfile] = useState("");
+
+  /* =========================
+     LOAD BANK PROFILES
+  ========================== */
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/bank-ledger/profiles`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setBankProfiles(data.profiles || []);
+        }
+      })
+      .catch((err) => console.error("Error loading bank profiles:", err));
+  }, []);
+
 /* =========================
    LOAD PENDING / PARTIAL
 ========================== */
@@ -85,8 +103,8 @@ const loadPendingAlways = async () => {
           total_purchase: normalizeZero(p.total_purchase),
           total_paid: normalizeZero(p.total_paid)
         }))
-        // Filter handles zero-check cleanly for both unpaid purchases & opening balance entries
-        .filter(p => p.status !== "PAID" || Math.abs(p.pending_amount) > 0.5)
+        // ✨ Filter out zero balance and PAID status
+        .filter(p => p.status !== "PAID" && Math.abs(p.pending_amount) > 0.5)
         .sort((a, b) => b.pending_amount - a.pending_amount);
       setPending(clean);
     }
@@ -214,6 +232,9 @@ const loadPendingAlways = async () => {
   const saveEntry = async () => {
     if (!supplierCode) return Swal.fire({ icon: "warning", text: "Supplier Code required" });
     if (!amountRaw || amountRaw <= 0) return Swal.fire({ icon: "warning", text: "Amount required" });
+    if (method === "Bank" && !selectedBankProfile) {
+      return Swal.fire({ icon: "warning", text: "Please select a Bank Profile" });
+    }
 
     setSaving(true);
     try {
@@ -226,6 +247,7 @@ const loadPendingAlways = async () => {
             supplier_code: supplierCode,
             payment_date: payDate,
             payment_method: method,
+            bank_profile_id: method === "Bank" ? selectedBankProfile : null,
             amount: amountRaw,
             type
           }),
@@ -240,6 +262,7 @@ const loadPendingAlways = async () => {
 
       setAmountRaw(0);
       setAmountDisp("");
+      setSelectedBankProfile("");
       await loadLedger();
       await loadPendingAlways();
       Swal.fire({ icon: "success", text: "Entry saved" });
@@ -286,16 +309,6 @@ const loadPendingAlways = async () => {
           toggle.textContent = show ? "🙈" : "👁";
         };
         setTimeout(() => input.focus(), 100);
-        const handleEnter = (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            document.querySelector(".swal2-confirm").click();
-          }
-        };
-        document.addEventListener("keydown", handleEnter);
-        Swal.getPopup().addEventListener("remove", () => {
-          document.removeEventListener("keydown", handleEnter);
-        });
       }
     });
     return value;
@@ -352,13 +365,21 @@ const loadPendingAlways = async () => {
   };
 
 /* ====================================================
-     EDIT ENTRY WITH PASSWORD & LIVE DATE FORMAT DISPLAY
+     EDIT ENTRY WITH TYPE & BANK SELECTION
   ==================================================== */
   const editEntry = async (entry) => {
     if (entry.entry_type !== "payment" || !entry.id) return;
 
     const formattedDate = entry.date ? new Date(entry.date).toISOString().split('T')[0] : today;
-    const currentType = (entry.type || "payment").toLowerCase();
+
+    // Detect current type for pre-selecting in dropdown
+    let currentTypeVal = "payment";
+    const rawType = (entry.type || "").toLowerCase();
+    if (rawType.includes("opening")) {
+      currentTypeVal = "opening_balance";
+    } else if (rawType.includes("adjust")) {
+      currentTypeVal = "adjustment";
+    }
 
     const { value: formValues } = await Swal.fire({
       width: "360px",
@@ -377,18 +398,35 @@ const loadPendingAlways = async () => {
             </div>
           </div>
           <div>
-            <label class="fw-bold mb-1">Transaction Type</label>
+            <label class="fw-bold mb-1">Entry Type</label>
             <select id="swal-edit-type" class="form-select form-select-sm">
-              <option value="payment" ${currentType.includes("payment") ? "selected" : ""}>Payment</option>
-              <option value="adjustment" ${currentType.includes("adjustment") ? "selected" : ""}>Adjustment</option>
-              <option value="opening_balance" ${currentType.includes("opening") ? "selected" : ""}>🔑 Opening Balance (Debit)</option>
+              <option value="payment" ${currentTypeVal === "payment" ? "selected" : ""}>Payment</option>
+              <option value="adjustment" ${currentTypeVal === "adjustment" ? "selected" : ""}>Adjustment</option>
+              <option value="opening_balance" ${currentTypeVal === "opening_balance" ? "selected" : ""}>🔑 Opening Balance</option>
             </select>
           </div>
           <div>
-            <label class="fw-bold mb-1">Method</label>
+            <label class="fw-bold mb-1">Payment Method / Bank</label>
             <select id="swal-edit-method" class="form-select form-select-sm">
-              <option value="Bank" ${entry.payment_method === "Bank" ? "selected" : ""}>Bank</option>
-              <option value="Cash" ${entry.payment_method === "Cash" ? "selected" : ""}>Cash</option>
+              <option value="Cash" ${!entry.bank_profile_id && entry.payment_method === "Cash" ? "selected" : ""}>
+                💵 Cash
+              </option>
+              ${
+                bankProfiles.length > 0
+                  ? bankProfiles
+                      .map(
+                        (p) => `
+                        <option 
+                          value="Bank_${p.id}" 
+                          ${entry.bank_profile_id == p.id ? "selected" : ""}
+                        >
+                          🏦 ${p.bank_name} (${p.account_number})
+                        </option>
+                      `
+                      )
+                      .join("")
+                  : `<option disabled>No Bank Profiles Found</option>`
+              }
             </select>
           </div>
           <div>
@@ -409,7 +447,6 @@ const loadPendingAlways = async () => {
         const dateInput = document.getElementById("swal-edit-date");
         const dateTextLabel = document.getElementById("swal-edit-date-text");
 
-        // Live Date Change Update
         dateInput.addEventListener("change", (e) => {
           dateTextLabel.textContent = formatDate(e.target.value);
         });
@@ -424,8 +461,8 @@ const loadPendingAlways = async () => {
       preConfirm: () => {
         const amount = document.getElementById("swal-edit-amount").value;
         const payment_date = document.getElementById("swal-edit-date").value;
-        const payment_method = document.getElementById("swal-edit-method").value;
-        const type = document.getElementById("swal-edit-type").value;
+        const selectedVal = document.getElementById("swal-edit-method").value;
+        const selectedType = document.getElementById("swal-edit-type").value;
         const password = document.getElementById("swal-edit-pass").value.trim();
 
         if (!amount || amount <= 0) {
@@ -437,12 +474,21 @@ const loadPendingAlways = async () => {
           return false;
         }
 
+        let payment_method = "Cash";
+        let bank_profile_id = null;
+
+        if (selectedVal.startsWith("Bank_")) {
+          payment_method = "Bank";
+          bank_profile_id = selectedVal.split("_")[1];
+        }
+
         return {
           amount: Number(amount),
           payment_date,
           payment_method,
-          type,
-          password
+          bank_profile_id,
+          password,
+          type: selectedType // ✨ Sends exact selected type ('payment', 'adjustment', 'opening_balance')
         };
       }
     });
@@ -483,144 +529,176 @@ const loadPendingAlways = async () => {
     }
   };
 
-  /* =========================
-     EXPORT PDF (WITH LOADER)
-  ========================= */
-  const exportPDF = async () => {
-    if (!pdfRef.current || ledger.length === 0) return;
+/* ====================================================
+   EXPORT PDF FUNCTION (DYNAMIC PAGE NUMBERS)
+==================================================== */
+const exportPDF = async () => {
+  if (!ledgerView || ledgerView.length === 0) {
+    return Swal.fire({ icon: "warning", text: "No ledger data to export!" });
+  }
 
-    Swal.fire({
-      width: "260px",
-      title: "Generating PDF...",
-      text: "Please wait",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
+  Swal.fire({
+    width: "260px",
+    title: "Generating PDF...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  try {
+    const doc = new jsPDF("p", "mm", "a4");
+    const supplierName = pending?.find(p => p.supplier_code === supplierCode)?.supplier_name || "N/A";
+    const printDate = formatDate(today);
+
+    // 1. Header Banner & Info Box Function
+    const renderPageHeader = () => {
+      // Blue Header Banner
+      doc.setFillColor(13, 71, 161);
+      doc.rect(0, 0, 210, 28, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("BE TRAVEL & TOURS", 105, 12, { align: "center" });
+
+      // Supplier Info Box (Gray Background)
+      doc.setFillColor(245, 247, 250);
+      doc.rect(10, 32, 190, 22, "F");
+
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text(`SUPPLIER NAME: ${supplierName.toUpperCase()}`, 14, 40);
+      doc.text(`SUPPLIER CODE: ${supplierCode || "-"}`, 14, 48);
+
+      doc.setFont("helvetica", "normal");
+      doc.text(`Statement Period: ${fromDate && toDate ? `${formatDate(fromDate)} to ${formatDate(toDate)}` : "All Records"}`, 130, 40);
+      doc.text(`Printed On: ${printDate}`, 130, 48);
+    };
+
+    // 2. Table Header Function
+    const renderTableHeader = (startY) => {
+      doc.setFillColor(33, 37, 41);
+      doc.rect(10, startY, 190, 8, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+
+      doc.text("Date", 14, startY + 5.5);
+      doc.text("Description", 45, startY + 5.5);
+      doc.text("Debit (-)", 135, startY + 5.5, { align: "right" });
+      doc.text("Credit (+)", 165, startY + 5.5, { align: "right" });
+      doc.text("Balance", 195, startY + 5.5, { align: "right" });
+    };
+
+    renderPageHeader();
+    let y = 60;
+    renderTableHeader(y);
+    y += 8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(30, 30, 30);
+
+    // 3. Render Table Rows
+    ledgerView.forEach((row) => {
+      // Check page break height
+      if (y > 270) {
+        doc.addPage();
+        renderPageHeader();
+        y = 60;
+        renderTableHeader(y);
+        y += 8;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 30, 30);
+      }
+
+      const itemDetail = row.type === "purchase" ? (row.detail || "Purchase Entry") : (row.description || row.type);
+
+      doc.text(formatDate(row.date), 14, y + 5);
+      doc.text(String(itemDetail).substring(0, 45), 45, y + 5);
+      doc.text(row.debit ? fmtAmt(row.debit) : "-", 135, y + 5, { align: "right" });
+      doc.text(row.credit ? fmtAmt(row.credit) : "-", 165, y + 5, { align: "right" });
+      doc.setFont("helvetica", "bold");
+      doc.text(fmtAmt(row.balance), 195, y + 5, { align: "right" });
+      doc.setFont("helvetica", "normal");
+
+      doc.setDrawColor(230, 230, 230);
+      doc.line(10, y + 7, 200, y + 7);
+
+      y += 8;
     });
 
-    setTimeout(async () => {
-      try {
-        const canvas = await html2canvas(pdfRef.current, { scale: 2, useCORS: true });
-        const imgData = canvas.toDataURL("image/png");
-        const pdf = new jsPDF("p", "mm", "a4");
+    // 4. DYNAMIC PAGE NUMBERING (Loop through total generated pages)
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      
+      // Page number dynamically written based on total pages
+      doc.text(`SUPPLIER LEDGER STATEMENT — Page ${i} of ${totalPages}`, 105, 20, { align: "center" });
+    }
 
-        const pageWidth = 210;
-        const pageHeight = 297;
-        const margin = 10;
-        const headerHeight = 30;
+    // Save File
+    doc.save(`Ledger-${supplierCode || "SUPPLIER"}-${supplierName.replace(/\s+/g, '_')}.pdf`);
+    Swal.close();
+  } catch (err) {
+    console.error("PDF Export Error:", err);
+    Swal.close();
+    Swal.fire({ icon: "error", text: "Failed to generate PDF" });
+  }
+};
 
-        const usableWidth = pageWidth - margin * 2;
-        const usableHeight = pageHeight - headerHeight - margin;
-        const imgWidth = usableWidth;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        const totalPages = Math.ceil(imgHeight / usableHeight);
+/* ====================================================
+   EXPORT EXCEL FUNCTION (WITH HEADER TITLE & INFO)
+==================================================== */
+const exportExcel = () => {
+  if (!ledgerView || ledgerView.length === 0) {
+    return Swal.fire({ icon: "warning", text: "No ledger data to export!" });
+  }
 
-        const supplierRow = ledger.find(r => r.supplier_name);
-        const supplierName = supplierRow?.supplier_name || "Supplier";
-        const rangeText = fromDate || toDate ? `${formatDate(fromDate)} → ${formatDate(toDate)}` : "All Dates";
-        const safeName = supplierName.replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s+/g, "_");
+  try {
+    const supplierName = pending?.find(p => p.supplier_code === supplierCode)?.supplier_name || "N/A";
 
-        for (let page = 0; page < totalPages; page++) {
-          if (page > 0) pdf.addPage();
+    // Build custom rows for Excel including Title Header
+    const excelRows = [
+      ["BE TRAVEL & TOURS"],
+      ["SUPPLIER LEDGER STATEMENT"],
+      [],
+      [`SUPPLIER NAME: ${supplierName}`, "", `Printed On: ${formatDate(today)}`],
+      [`SUPPLIER CODE: ${supplierCode || "-"}`, "", `Statement Period: ${fromDate && toDate ? `${formatDate(fromDate)} to ${formatDate(toDate)}` : "All Records"}`],
+      [],
+      ["Date", "Type", "Ref No", "Description", "Payment Method", "Debit (-)", "Credit (+)", "Balance"]
+    ];
 
-          pdf.setFillColor(18, 97, 160);
-          pdf.rect(0, 0, pageWidth, 20, "F");
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFontSize(16);
-          pdf.text("BE TRAVEL & TOURS", pageWidth / 2, 10, { align: "center" });
-          pdf.setFontSize(10);
-          pdf.text("Supplier Ledger Statement", pageWidth / 2, 16, { align: "center" });
-
-          pdf.setTextColor(0, 0, 0);
-          pdf.setFontSize(11);
-          pdf.text(`Supplier: ${supplierName}`, margin, 26);
-          pdf.text(`Code: ${supplierCode}`, pageWidth - margin, 26, { align: "right" });
-
-          pdf.setFontSize(9);
-          pdf.text(`Date Range: ${rangeText}`, pageWidth / 2, 31, { align: "center" });
-
-          const yOffset = -(usableHeight * page);
-          pdf.addImage(imgData, "PNG", margin, headerHeight + yOffset, imgWidth, imgHeight);
-
-          pdf.setFontSize(9);
-          pdf.setTextColor(120);
-          pdf.text(`Page ${page + 1} / ${totalPages}`, pageWidth - margin, pageHeight - 5, { align: "right" });
-        }
-
-        pdf.save(`${supplierCode}-${safeName}-ledger.pdf`);
-        Swal.close();
-      } catch (err) {
-        console.error(err);
-        Swal.close();
-        Swal.fire({ icon: "error", text: "Failed to generate PDF" });
-      }
-    }, 150);
-  };
-
-  /* ==========================================
-     EXPORT EXCEL (WITH LOADER)
-  ========================================== */
-  const exportExcel = () => {
-    if (ledger.length === 0) return;
-
-    Swal.fire({
-      width: "250px",
-      title: "Generating Excel...",
-      text: "Please wait a moment",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
+    // Append Table Rows
+    ledgerView.forEach((r) => {
+      excelRows.push([
+        formatDate(r.date),
+        r.type || "-",
+        r.ref_no || "-",
+        r.detail || r.description || "-",
+        r.payment_method || "-",
+        r.debit || 0,
+        r.credit || 0,
+        r.balance || 0
+      ]);
     });
 
-    setTimeout(() => {
-      try {
-        const supplierRow = ledger.find(r => r.supplier_name);
-        const supplierName = supplierRow?.supplier_name || "Supplier";
+    const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Supplier Ledger");
 
-        const headerInfo = [
-          ["BE TRAVEL & TOURS"],
-          ["SUPPLIER LEDGER STATEMENT"],
-          [""],
-          ["Supplier Name:", supplierName.toUpperCase(), "", "Printed Date:", formatDate(today)],
-          ["Supplier Code:", supplierCode, "", "Statement Period:", fromDate || toDate ? `${formatDate(fromDate)} to ${formatDate(toDate)}` : "All Records"],
-          [""]
-        ];
-
-        const tableHeaders = ["Date", "Type", "Ref No", "Item Detail", "Payment Method", "Debit", "Credit", "Balance"];
-        
-        const tableData = ledgerView.map((r) => [
-          formatDate(r.date),
-          r.type || "-",
-          r.ref_no || "-",
-          r.detail || "-",
-          r.payment_method || "-",
-          r.debit > 0 ? r.debit : 0,
-          r.credit > 0 ? r.credit : 0,
-          r.balance
-        ]);
-
-        const sheetData = [...headerInfo, tableHeaders, ...tableData];
-        const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Supplier Ledger");
-
-        worksheet["!cols"] = [
-          { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 18 }
-        ];
-
-        const safeName = supplierName.replace(/[^a-zA-Z0-9]/g, "_");
-        XLSX.writeFile(workbook, `Supplier-${supplierCode}-${safeName}.xlsx`);
-
-        Swal.close();
-      } catch (error) {
-        console.error(error);
-        Swal.close();
-        Swal.fire({ width: "300px", icon: "error", text: "Failed to generate Excel sheet" });
-      }
-    }, 150);
-  };
+    XLSX.writeFile(workbook, `Ledger_${supplierCode || "SUPPLIER"}.xlsx`);
+  } catch (err) {
+    console.error("Excel Export Error:", err);
+    Swal.fire({ icon: "error", text: "Failed to export Excel file" });
+  }
+};
 
   return (
     <div className="container-fluid p-3">
-      {/* HEADER CARD */}
       <div className="card shadow-sm mb-3">
         <div className="card-body d-flex justify-content-between align-items-center py-2">
           <h4 className="fw-bold mb-0 text-primary">📘 SUPPLIER LEDGER SYSTEM</h4>
@@ -629,7 +707,7 @@ const loadPendingAlways = async () => {
       </div>
 
       <div className="row g-3">
-        {/* LEFT COLUMN */}
+        {/* LEFT COLUMN - PENDING */}
         <div className="col-lg-3 col-md-4 col-12">
           <div className="card shadow-sm" style={{ maxHeight: "calc(100vh - 120px)", overflowY: "auto" }}>
             <div className="card-header fw-bold text-danger bg-light sticky-top">⏳ Pending / Partial List</div>
@@ -692,7 +770,6 @@ const loadPendingAlways = async () => {
               <div className="col-md-2">
                 <label className="form-label small fw-bold mb-1">Payment Date</label>
                 <input type="date" className="form-control form-control-sm" value={payDate} onChange={e => setPayDate(e.target.value)} />
-                {/* LIVE FORMATTED DATE TEXT DISPLAY */}
                 <span className="text-primary fw-bold d-block mt-1" style={{ fontSize: "0.75rem" }}>
                   {formatDate(payDate)}
                 </span>
@@ -711,21 +788,41 @@ const loadPendingAlways = async () => {
                   </span>
                 )}
               </div>
-              <div className="col-md-3">
-                <label className="form-label small text-muted mb-1">Transaction Type</label>
+              <div className="col-md-2">
+                <label className="form-label small text-muted mb-1">Type</label>
                 <select className="form-select form-select-sm" value={type} onChange={(e) => setType(e.target.value)}>
                   <option value="payment">Payment</option>
                   <option value="adjustment">Adjustment</option>
-                  <option value="opening_balance">🔑 opening_balance (Debit)</option>
+                  <option value="opening_balance">🔑 opening_balance</option>
                 </select>
               </div>
               <div className="col-md-2">
                 <label className="form-label small fw-bold mb-1">Method</label>
-                <select className="form-control form-control-sm" value={method} onChange={e => setMethod(e.target.value)}>
-                  <option>Bank</option>
-                  <option>Cash</option>
+                <select className="form-select form-select-sm" value={method} onChange={e => setMethod(e.target.value)}>
+                  <option value="Bank">Bank</option>
+                  <option value="Cash">Cash</option>
                 </select>
               </div>
+              
+              {/* ✨ Dynamic Bank Selection List */}
+              {method === "Bank" && (
+                <div className="col-md-3">
+                  <label className="form-label small text-muted mb-1">Select Bank Account</label>
+                  <select
+                    className="form-select form-select-sm fw-bold"
+                    value={selectedBankProfile}
+                    onChange={(e) => setSelectedBankProfile(e.target.value)}
+                  >
+                    <option value="">-- Choose Bank --</option>
+                    {bankProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.bank_name} ({p.account_number})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="col-md-2">
                 <button className="btn btn-success btn-sm w-100" disabled={saving} onClick={saveEntry}>
                   {saving ? "Saving..." : "💾 Save"}
@@ -734,7 +831,7 @@ const loadPendingAlways = async () => {
             </div>
           </div>
 
-          {/* LEDGER TABLE CARD */}
+          {/* LEDGER TABLE */}
           <div ref={pdfRef} className="card shadow-sm">
             <div className="table-responsive">
               <table className="table table-bordered table-sm mb-0 text-end" style={{ fontSize: "0.85rem" }}>
@@ -792,7 +889,9 @@ const loadPendingAlways = async () => {
                         <td className="text-start fw-bold text-success small">{itemDetail}</td>
                         <td className="text-center small">
                           {r.payment_method && r.payment_method !== "-" ? (
-                            <span className={`badge ${r.payment_method.toLowerCase() === "cash" ? "bg-success" : "bg-primary"}`}>{r.payment_method}</span>
+                            <span className={`badge ${r.payment_method.toLowerCase() === "cash" ? "bg-success" : "bg-primary"}`}>
+                              {r.bank_name ? `Bank: ${r.bank_name}` : r.payment_method}
+                            </span>
                           ) : "-"}
                         </td>
                         <td className={normalizeZero(r.debit) > 0 ? "text-danger fw-bold" : ""}>{fmtAmt(r.debit)}</td>
@@ -825,7 +924,6 @@ const loadPendingAlways = async () => {
               </table>
             </div>
 
-            {/* LEDGER FOOTER METADATA OUTSIDE TABLE HTML */}
             <div className="card p-2 m-2 bg-light border-0">
               <div className="row text-center text-md-start">
                 <div className="col-md-4">
