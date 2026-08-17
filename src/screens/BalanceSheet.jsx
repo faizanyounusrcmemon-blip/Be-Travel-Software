@@ -224,19 +224,25 @@ export default function BalanceSheet({ onNavigate }) {
               <td>💎 Total Extra Received Adjustments (- Liabilities)</td>
               <td className="text-end fw-bold text-danger">-{fmt(data.summary?.total_extra_received)}</td>
             </tr>
-<tr className={`fw-bold text-white ${finalPos >= 0 ? "bg-success" : "bg-danger"}`} style={{ fontSize: "1.1rem" }}>
-  <td>
+<tr className="fw-bold" style={{ fontSize: "1.1rem" }}>
+  <td 
+    className="py-3 text-white" 
+    style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
+  >
     🏁 Final Net Financial Position <br />
     <small className="fw-normal opacity-75">
       {finalPos >= 0 
-        ? "(Saare Payables dene ke baad bachat / Lene zyada hain)" 
-        : "(Shortage / Dena zyada hai)"}
+        ? "(Lene zyada hain / Saare Payables dene ke baad bachat)" 
+        : "(Dene zyada hain / Shortage)"}
     </small>
   </td>
-  <td className="text-end align-middle">
+  <td 
+    className="text-end align-middle py-3 text-white" 
+    style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
+  >
     {finalPos >= 0 
-      ? `PKR ${fmt(finalPos)} (NET SURPLUS)` 
-      : `PKR ${fmt(Math.abs(finalPos))} (NET DEFICIT)`}
+      ? `PKR ${fmt(finalPos)} (LENE HAIN - NET SURPLUS)` 
+      : `PKR ${fmt(Math.abs(finalPos))} (DENE HAIN - NET DEFICIT)`}
   </td>
 </tr>
           </tbody>
