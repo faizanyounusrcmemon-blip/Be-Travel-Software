@@ -34,6 +34,7 @@ export default function BalanceSheet({ onNavigate }) {
   const standardRows = (data.customers || []).map(r => ({ ...r, balance: cleanBalance(r.balance) })).filter(r => r.balance !== 0);
   const registeredRows = (data.registeredCustomers || []).map(r => ({ ...r, balance: cleanBalance(r.balance) })).filter(r => r.balance !== 0);
   const supplierRows = (data.suppliers || []).map(r => ({ ...r, balance: cleanBalance(r.balance) })).filter(r => r.balance !== 0);
+  const bankRows = data.banks || [];
 
   const getStatusBadge = (status) => {
     if (!status) return null;
@@ -45,6 +46,8 @@ export default function BalanceSheet({ onNavigate }) {
     }
   };
 
+  const finalPos = Number(data.summary?.final_net_position || 0);
+
   return (
     <div className="container py-4">
       {/* HEADER */}
@@ -54,7 +57,7 @@ export default function BalanceSheet({ onNavigate }) {
             <div className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 48, height: 48, background: "rgba(255,255,255,0.2)", fontSize: 22 }}>📊</div>
             <div>
               <h4 className="mb-1 fw-bold">Balance Sheet Statement</h4>
-              <small className="opacity-75">Isolated Standard Accounts, Registered Ledger Accounts & Supplier Summaries</small>
+              <small className="opacity-75">Customer Receivables, Supplier Payables, Cash in Hand & Bank Balances</small>
             </div>
           </div>
           <button className="btn btn-light btn-sm fw-semibold" onClick={() => onNavigate("dashboard")}>← Back</button>
@@ -95,11 +98,9 @@ export default function BalanceSheet({ onNavigate }) {
         </div>
       </div>
 
-      {/* SECTION 2: REGISTERED CUSTOMERS (NEW ISOLATED TABLE) */}
+      {/* SECTION 2: REGISTERED CUSTOMERS */}
       <div className="card shadow-sm mb-4 border-start border-info border-3">
-        <div className="card-header bg-white fw-bold text-info d-flex justify-content-between align-items-center">
-          <span>🔑 Registered Ledger Customers Accounts</span>
-        </div>
+        <div className="card-header bg-white fw-bold text-info">🔑 Registered Ledger Customers Accounts</div>
         <div className="table-responsive">
           <table className="table table-hover mb-0">
             <thead className="table-light">
@@ -107,8 +108,8 @@ export default function BalanceSheet({ onNavigate }) {
                 <th>#</th>
                 <th>Customer Code</th>
                 <th>Account Name</th>
-                <th className="text-end">Total Debits (Sales + OB)</th>
-                <th className="text-end">Total Credits (Paid)</th>
+                <th className="text-end">Total Debits</th>
+                <th className="text-end">Total Credits</th>
                 <th className="text-end">Current Balance</th>
                 <th>Status</th>
               </tr>
@@ -116,12 +117,12 @@ export default function BalanceSheet({ onNavigate }) {
             <tbody>
               {registeredRows.length === 0 && <tr><td colSpan="7" className="text-center text-muted py-2">No registered customer accounts balance.</td></tr>}
               {registeredRows.map((r, i) => (
-                <tr key={i} className="table-info-light">
+                <tr key={i}>
                   <td>{i + 1}</td>
                   <td className="fw-bold text-dark">{r.customer_code}</td>
                   <td className="fw-semibold text-primary">{r.customer_name}</td>
-                  <td className="text-end text-dark">{fmt(r.sale_total)}</td>
-                  <td className="text-end text-dark">{fmt(r.received)}</td>
+                  <td className="text-end">{fmt(r.sale_total)}</td>
+                  <td className="text-end">{fmt(r.received)}</td>
                   <td className={`text-end fw-bold ${r.balance < 0 ? "text-primary" : "text-danger"}`}>{fmt(r.balance)}</td>
                   <td>{getStatusBadge(r.status)}</td>
                 </tr>
@@ -164,33 +165,80 @@ export default function BalanceSheet({ onNavigate }) {
         </div>
       </div>
 
-      {/* SUMMARY BLOCK */}
+      {/* SECTION 4: BANK PROFILES */}
+      <div className="card shadow-sm mb-4 border-start border-primary border-3">
+        <div className="card-header bg-white fw-bold text-primary">🏦 Bank Accounts Balances</div>
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>#</th>
+                <th>Bank Name</th>
+                <th>Account Title</th>
+                <th>Account Number</th>
+                <th className="text-end">Available Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bankRows.length === 0 && <tr><td colSpan="5" className="text-center text-muted py-2">No active bank accounts found.</td></tr>}
+              {bankRows.map((b, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td className="fw-bold text-dark">{b.bank_name}</td>
+                  <td>{b.account_title}</td>
+                  <td className="text-muted">{b.account_number}</td>
+                  <td className={`text-end fw-bold ${b.balance >= 0 ? "text-success" : "text-danger"}`}>{fmt(b.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* SUMMARY & FINAL POSITION BLOCK */}
       <div className="card shadow-sm">
-        <div className="card-header bg-white fw-bold text-primary">📌 Summary Details</div>
+        <div className="card-header bg-white fw-bold text-dark">📌 Complete System Summary</div>
         <table className="table mb-0">
           <tbody>
             <tr>
-              <td>💰 Total Customer Receivable (Standard + Registered)</td>
-              <td className="text-end fw-bold text-success">{fmt(data.summary?.total_receivable)}</td>
+              <td>💰 Total Customer Receivables (+ Assets)</td>
+              <td className="text-end fw-bold text-success">+{fmt(data.summary?.total_receivable)}</td>
             </tr>
             <tr>
-              <td>📦 Total Supplier Payable</td>
-              <td className="text-end fw-bold text-danger">{fmt(data.summary?.total_payable)}</td>
+              <td>💵 Cash in Hand (+ Assets)</td>
+              <td className="text-end fw-bold text-success">+{fmt(data.summary?.cash_in_hand)}</td>
             </tr>
             <tr>
-              <td>💎 Total Extra Received Adjustments</td>
-              <td className="text-end fw-bold text-primary">{fmt(data.summary?.total_extra_received)}</td>
+              <td>🏦 Total Bank Accounts Balance (+ Assets)</td>
+              <td className="text-end fw-bold text-success">+{fmt(data.summary?.total_bank_balance)}</td>
             </tr>
             <tr>
-              <td>💸 Total Extra Paid Adjustments</td>
-              <td className="text-end fw-bold text-primary">{fmt(data.summary?.total_extra_paid)}</td>
+              <td>💸 Total Extra Paid Adjustments (+ Assets)</td>
+              <td className="text-end fw-bold text-success">+{fmt(data.summary?.total_extra_paid)}</td>
             </tr>
-            <tr className="table-light fw-bold">
-              <td>🔄 Net System Position <br /><small className="text-muted">{(Number(data.summary?.total_receivable) - Number(data.summary?.total_payable)) >= 0 ? "Net Receivable Position" : "Net Payable Position"}</small></td>
-              <td className={`text-end ${(Number(data.summary?.total_receivable) - Number(data.summary?.total_payable)) >= 0 ? "text-success" : "text-danger"}`}>
-                {fmt(Math.abs(Number(data.summary?.total_receivable) - Number(data.summary?.total_payable)))}
-              </td>
+            <tr className="table-light">
+              <td>📦 Total Supplier Payables (- Liabilities)</td>
+              <td className="text-end fw-bold text-danger">-{fmt(data.summary?.total_payable)}</td>
             </tr>
+            <tr className="table-light">
+              <td>💎 Total Extra Received Adjustments (- Liabilities)</td>
+              <td className="text-end fw-bold text-danger">-{fmt(data.summary?.total_extra_received)}</td>
+            </tr>
+<tr className={`fw-bold text-white ${finalPos >= 0 ? "bg-success" : "bg-danger"}`} style={{ fontSize: "1.1rem" }}>
+  <td>
+    🏁 Final Net Financial Position <br />
+    <small className="fw-normal opacity-75">
+      {finalPos >= 0 
+        ? "(Saare Payables dene ke baad bachat / Lene zyada hain)" 
+        : "(Shortage / Dena zyada hai)"}
+    </small>
+  </td>
+  <td className="text-end align-middle">
+    {finalPos >= 0 
+      ? `PKR ${fmt(finalPos)} (NET SURPLUS)` 
+      : `PKR ${fmt(Math.abs(finalPos))} (NET DEFICIT)`}
+  </td>
+</tr>
           </tbody>
         </table>
       </div>
