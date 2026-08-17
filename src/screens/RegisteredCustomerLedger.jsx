@@ -60,6 +60,7 @@ export default function RegisteredCustomerLedger({ onNavigate }) {
   const [customerName, setCustomerName] = useState("");
   const [rows, setRows] = useState([]);
   const [pending, setPending] = useState([]);
+  const [pendingSearch, setPendingSearch] = useState("");
 
   // Date Filters
   const [startDate, setStartDate] = useState("");
@@ -143,6 +144,16 @@ const loadPending = async () => {
   useEffect(() => {
     loadPending();
   }, []);
+
+// Filtered Pending List Search Logic
+const filteredPending = pending.filter((p) => {
+  const query = pendingSearch.trim().toLowerCase();
+  if (!query) return true;
+  return (
+    (p.customer_code && p.customer_code.toLowerCase().includes(query)) ||
+    (p.customer_name && p.customer_name.toLowerCase().includes(query))
+  );
+});
 
   /* =========================
      LOAD SPECIFIC LEDGER
@@ -868,28 +879,43 @@ const fetchSaleDetail = async (id, description) => {
               <span>⏳ Outstanding Ledgers</span>
               <button className="btn btn-outline-light btn-sm py-0 px-2" onClick={loadPending}>🔄</button>
             </div>
-            <div className="card-body p-2" style={{ maxHeight: "75vh", overflowY: "auto" }}>
-              {pending.length === 0 ? (
-                <div className="p-3 text-center text-muted">
-                  <h6>✅ No Pending Ledger</h6>
-                  <p className="small mb-0">All registered customers are clear!</p>
-                </div>
-              ) : (
-                <div className="list-group list-group-flush">
-                  {pending.map((p, i) => (
-                    <div
-                      key={i}
-                      onClick={() => {
-                        setCustomerCode(p.customer_code);
-                        loadLedger(p.customer_code);
-                      }}
-                      className="list-group-item list-group-item-action p-2 mb-2 rounded border-start border-4 cursor-pointer"
-                      style={{
-                        cursor: "pointer",
-                        borderStartColor: p.payment_status === "PENDING" ? "#dc3545" : "#ffc107",
-                        backgroundColor: p.customer_code === customerCode ? "#e2eafd" : "#f8f9fa"
-                      }}
-                    >
+
+{/* YE SEARCH BOX ADD KAREIN */}
+<div className="p-2 border-bottom bg-light">
+  <input
+    type="text"
+    className="form-control form-control-sm"
+    placeholder="🔍 Search Customer Code or Name..."
+    value={pendingSearch}
+    onChange={(e) => setPendingSearch(e.target.value)}
+  />
+</div>
+
+<div className="card-body p-2" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+  {filteredPending.length === 0 ? (
+    <div className="p-3 text-center text-muted">
+      <h6>{pending.length === 0 ? "✅ No Pending Ledger" : "🔍 No Customer Found"}</h6>
+      <p className="small mb-0">
+        {pending.length === 0 ? "All registered customers are clear!" : "Try searching with a different code or name."}
+      </p>
+    </div>
+  ) : (
+    <div className="list-group list-group-flush">
+      {/* PENDING KI JAGAH FILTEREDPENDING USE KAREIN */}
+      {filteredPending.map((p, i) => (
+        <div
+          key={i}
+          onClick={() => {
+            setCustomerCode(p.customer_code);
+            loadLedger(p.customer_code);
+          }}
+          className="list-group-item list-group-item-action p-2 mb-2 rounded border-start border-4 cursor-pointer"
+          style={{
+            cursor: "pointer",
+            borderStartColor: p.payment_status === "PENDING" ? "#dc3545" : "#ffc107",
+            backgroundColor: p.customer_code === customerCode ? "#e2eafd" : "#f8f9fa"
+          }}
+        >
                       <div className="d-flex justify-content-between align-items-start mb-1">
                         {/* Always displays unique Customer Code */}
                         {/* Always displays strictly Customer Code */}
