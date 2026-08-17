@@ -36,6 +36,21 @@ export default function BalanceSheet({ onNavigate }) {
   const supplierRows = (data.suppliers || []).map(r => ({ ...r, balance: cleanBalance(r.balance) })).filter(r => r.balance !== 0);
   const bankRows = data.banks || [];
 
+  // Totals Calculations
+  const stdTotalSale = standardRows.reduce((a, r) => a + Number(r.sale_total || 0), 0);
+  const stdTotalReceived = standardRows.reduce((a, r) => a + Number(r.received || 0), 0);
+  const stdTotalBalance = standardRows.reduce((a, r) => a + Number(r.balance || 0), 0);
+
+  const regTotalDebits = registeredRows.reduce((a, r) => a + Number(r.sale_total || 0), 0);
+  const regTotalCredits = registeredRows.reduce((a, r) => a + Number(r.received || 0), 0);
+  const regTotalBalance = registeredRows.reduce((a, r) => a + Number(r.balance || 0), 0);
+
+  const supTotalPurchase = supplierRows.reduce((a, r) => a + Number(r.purchase_total || 0), 0);
+  const supTotalPaid = supplierRows.reduce((a, r) => a + Number(r.paid || 0), 0);
+  const supTotalBalance = supplierRows.reduce((a, r) => a + Number(r.balance || 0), 0);
+
+  const bankTotalBalance = bankRows.reduce((a, b) => a + Number(b.balance || 0), 0);
+
   const getStatusBadge = (status) => {
     if (!status) return null;
     switch (status.toUpperCase()) {
@@ -94,6 +109,17 @@ export default function BalanceSheet({ onNavigate }) {
                 </tr>
               ))}
             </tbody>
+            {standardRows.length > 0 && (
+              <tfoot className="table-secondary fw-bold">
+                <tr>
+                  <td colSpan="3" className="text-end">Total Walk-In Customer:</td>
+                  <td className="text-end">{fmt(stdTotalSale)}</td>
+                  <td className="text-end">{fmt(stdTotalReceived)}</td>
+                  <td className={`text-end ${stdTotalBalance < 0 ? "text-primary" : "text-success"}`}>{fmt(stdTotalBalance)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -128,6 +154,17 @@ export default function BalanceSheet({ onNavigate }) {
                 </tr>
               ))}
             </tbody>
+            {registeredRows.length > 0 && (
+              <tfoot className="table-secondary fw-bold">
+                <tr>
+                  <td colSpan="3" className="text-end">Total Registered Customers:</td>
+                  <td className="text-end">{fmt(regTotalDebits)}</td>
+                  <td className="text-end">{fmt(regTotalCredits)}</td>
+                  <td className={`text-end ${regTotalBalance < 0 ? "text-primary" : "text-danger"}`}>{fmt(regTotalBalance)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -161,6 +198,17 @@ export default function BalanceSheet({ onNavigate }) {
                 </tr>
               ))}
             </tbody>
+            {supplierRows.length > 0 && (
+              <tfoot className="table-secondary fw-bold">
+                <tr>
+                  <td colSpan="3" className="text-end">Total Supplier:</td>
+                  <td className="text-end">{fmt(supTotalPurchase)}</td>
+                  <td className="text-end">{fmt(supTotalPaid)}</td>
+                  <td className={`text-end ${supTotalBalance < 0 ? "text-primary" : "text-danger"}`}>{fmt(supTotalBalance)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -191,6 +239,14 @@ export default function BalanceSheet({ onNavigate }) {
                 </tr>
               ))}
             </tbody>
+            {bankRows.length > 0 && (
+              <tfoot className="table-secondary fw-bold">
+                <tr>
+                  <td colSpan="4" className="text-end">Total Available Bank Balance:</td>
+                  <td className={`text-end ${bankTotalBalance >= 0 ? "text-success" : "text-danger"}`}>{fmt(bankTotalBalance)}</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -224,27 +280,27 @@ export default function BalanceSheet({ onNavigate }) {
               <td>💎 Total Extra Received Adjustments (- Liabilities)</td>
               <td className="text-end fw-bold text-danger">-{fmt(data.summary?.total_extra_received)}</td>
             </tr>
-<tr className="fw-bold" style={{ fontSize: "1.1rem" }}>
-  <td 
-    className="py-3 text-white" 
-    style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
-  >
-    🏁 Final Net Financial Position <br />
-    <small className="fw-normal opacity-75">
-      {finalPos >= 0 
-        ? "(Lene zyada hain / Saare Payables dene ke baad bachat)" 
-        : "(Dene zyada hain / Shortage)"}
-    </small>
-  </td>
-  <td 
-    className="text-end align-middle py-3 text-white" 
-    style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
-  >
-    {finalPos >= 0 
-      ? `PKR ${fmt(finalPos)} (LENE HAIN - NET SURPLUS)` 
-      : `PKR ${fmt(Math.abs(finalPos))} (DENE HAIN - NET DEFICIT)`}
-  </td>
-</tr>
+            <tr className="fw-bold" style={{ fontSize: "1.1rem" }}>
+              <td 
+                className="py-3 text-white" 
+                style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
+              >
+                🏁 Final Net Financial Position <br />
+                <small className="fw-normal opacity-75">
+                  {finalPos >= 0 
+                    ? "(Lene zyada hain / Saare Payables dene ke baad bachat)" 
+                    : "(Dene zyada hain / Shortage)"}
+                </small>
+              </td>
+              <td 
+                className="text-end align-middle py-3 text-white" 
+                style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
+              >
+                {finalPos >= 0 
+                  ? `PKR ${fmt(finalPos)} (LENE HAIN - NET SURPLUS)` 
+                  : `PKR ${fmt(Math.abs(finalPos))} (DENE HAIN - NET DEFICIT)`}
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
