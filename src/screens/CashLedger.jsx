@@ -168,129 +168,166 @@ export default function CashLedger({ onNavigate }) {
     }
   };
 
-  /* ================= EDIT MANUAL ENTRY WITH LIVE DATE DISPLAY ================= */
-  const editRow = async (row) => {
-    const formattedDateForInput = row.txn_date ? new Date(row.txn_date).toISOString().split("T")[0] : today;
-    const currentAmount = row.credit > 0 ? row.credit : row.debit;
-    const currentType = row.credit > 0 ? "deposit" : "withdraw";
+/* ================= EDIT MANUAL ENTRY (2-STEP VERIFICATION FLOW) ================= */
+const editRow = async (row) => {
+  if (!row || !row.id) return;
 
-    const { value: formValues } = await Swal.fire({
-      width: "360px",
-      title: "✏️ Edit Cash Transaction",
-      html: `
-        <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
-          <div>
-            <label class="fw-bold mb-1">Transaction Date</label>
-            <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDateForInput}" />
-            <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
-              ${formatDate(formattedDateForInput)}
-            </div>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Amount (PKR)</label>
-            <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${currentAmount || 0}" />
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Type</label>
-            <select id="swal-edit-type" class="form-select form-select-sm">
-              <option value="deposit" ${currentType === "deposit" ? "selected" : ""}>➕ Deposit</option>
-              <option value="withdraw" ${currentType === "withdraw" ? "selected" : ""}>➖ Withdraw</option>
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Comment / Description</label>
-            <input id="swal-edit-comment" type="text" class="form-control form-control-sm" value="${row.description || ""}" />
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Authorization Password</label>
-            <div style="position:relative;">
-              <input id="swal-edit-pass" type="password" class="form-control form-control-sm" placeholder="Password" style="padding-right:35px;" />
-              <span id="eye-toggle-edit" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; user-select:none;">👁</span>
-            </div>
+  // ----------------------------------------------------
+  // STEP 1: PASSWORD VERIFICATION POPUP
+  // ----------------------------------------------------
+  const passInput = await askPassword("🔐 Authorization Password Required");
+  if (!passInput) return; // User canceled or empty
+
+  // Verification loading state
+  Swal.fire({
+    width: "250px",
+    title: "Verifying...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  // Verify password with backend
+  try {
+    const verifyRes = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/cash-ledger/verify-password`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passInput }),
+      }
+    );
+    const verifyData = await verifyRes.json();
+
+    if (!verifyData.success) {
+      return Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: verifyData.error || "Incorrect Authorization Password!",
+      });
+    }
+  } catch (err) {
+    return Swal.fire({
+      width: "300px",
+      icon: "error",
+      text: "Network error during password verification",
+    });
+  }
+
+  // ----------------------------------------------------
+  // STEP 2: EDIT FORM POPUP (Password Verified True!)
+  // ----------------------------------------------------
+  const formattedDateForInput = row.txn_date
+    ? new Date(row.txn_date).toISOString().split("T")[0]
+    : today;
+  const currentAmount = row.credit > 0 ? row.credit : row.debit;
+  const currentType = row.credit > 0 ? "deposit" : "withdraw";
+
+  const { value: formValues } = await Swal.fire({
+    width: "360px",
+    title: "✏️ Edit Cash Transaction",
+    html: `
+      <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
+        <div>
+          <label class="fw-bold mb-1">Transaction Date</label>
+          <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDateForInput}" />
+          <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
+            ${formatDate(formattedDateForInput)}
           </div>
         </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Update Transaction",
-      focusConfirm: false,
-      didOpen: () => {
-        const input = document.getElementById("swal-edit-pass");
-        const eye = document.getElementById("eye-toggle-edit");
-        const dateInput = document.getElementById("swal-edit-date");
-        const dateTextLabel = document.getElementById("swal-edit-date-text");
+        <div>
+          <label class="fw-bold mb-1">Amount (PKR)</label>
+          <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${currentAmount || 0}" />
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Type</label>
+          <select id="swal-edit-type" class="form-select form-select-sm">
+            <option value="deposit" ${currentType === "deposit" ? "selected" : ""}>➕ Deposit</option>
+            <option value="withdraw" ${currentType === "withdraw" ? "selected" : ""}>➖ Withdraw</option>
+          </select>
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Comment / Description</label>
+          <input id="swal-edit-comment" type="text" class="form-control form-control-sm" value="${row.description || ""}" />
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Update Transaction",
+    focusConfirm: false,
+    didOpen: () => {
+      const dateInput = document.getElementById("swal-edit-date");
+      const dateTextLabel = document.getElementById("swal-edit-date-text");
 
-        // Live Date Format Update
-        dateInput.addEventListener("change", (e) => {
-          dateTextLabel.textContent = formatDate(e.target.value);
-        });
+      // Live Date Format Update
+      dateInput.addEventListener("change", (e) => {
+        dateTextLabel.textContent = formatDate(e.target.value);
+      });
+    },
+    preConfirm: () => {
+      const txn_date = document.getElementById("swal-edit-date").value;
+      const amountVal = document.getElementById("swal-edit-amount").value;
+      const typeVal = document.getElementById("swal-edit-type").value;
+      const commentVal = document.getElementById("swal-edit-comment").value.trim();
 
-        let visible = false;
-        eye.addEventListener("click", () => {
-          visible = !visible;
-          input.type = visible ? "text" : "password";
-          eye.textContent = visible ? "🙈" : "👁";
-        });
-      },
-      preConfirm: () => {
-        const txn_date = document.getElementById("swal-edit-date").value;
-        const amountVal = document.getElementById("swal-edit-amount").value;
-        const typeVal = document.getElementById("swal-edit-type").value;
-        const commentVal = document.getElementById("swal-edit-comment").value.trim();
-        const password = document.getElementById("swal-edit-pass").value.trim();
-
-        if (!txn_date) {
-          Swal.showValidationMessage("Date required");
-          return false;
-        }
-        if (!amountVal || Number(amountVal) <= 0) {
-          Swal.showValidationMessage("Valid amount required");
-          return false;
-        }
-        if (!password) {
-          Swal.showValidationMessage("Password required");
-          return false;
-        }
-
-        return {
-          txn_date,
-          amount: Number(amountVal),
-          type: typeVal,
-          comment: commentVal,
-          password
-        };
+      if (!txn_date) {
+        Swal.showValidationMessage("Date required");
+        return false;
       }
-    });
+      if (!amountVal || Number(amountVal) <= 0) {
+        Swal.showValidationMessage("Valid amount required");
+        return false;
+      }
 
-    if (!formValues) return;
+      return {
+        txn_date,
+        amount: Number(amountVal),
+        type: typeVal,
+        comment: commentVal,
+      };
+    },
+  });
 
-    Swal.fire({
-      width: "260px",
-      title: "Updating...",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
-    });
+  if (!formValues) return;
 
-    try {
-      const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/cash-ledger/transaction/${row.id}`, {
+  Swal.fire({
+    width: "260px",
+    title: "Updating...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  try {
+    const r = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/cash-ledger/transaction/${row.id}`,
+      {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formValues)
-      });
-
-      const d = await r.json();
-      Swal.close();
-
-      if (d.success) {
-        load();
-        Swal.fire({ width: "280px", icon: "success", text: "Transaction Updated Successfully" });
-      } else {
-        Swal.fire({ width: "300px", icon: "error", text: d.error || "Update Failed!" });
+        body: JSON.stringify(formValues),
       }
-    } catch (err) {
-      Swal.close();
-      Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
+    );
+
+    const d = await r.json();
+    Swal.close();
+
+    if (d.success) {
+      load();
+      Swal.fire({
+        width: "280px",
+        icon: "success",
+        text: "Transaction Updated Successfully",
+      });
+    } else {
+      Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: d.error || "Update Failed!",
+      });
     }
-  };
+  } catch (err) {
+    Swal.close();
+    Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
+  }
+};
 
   /* ================= PASSWORD POPUP ================= */
   const askPassword = async (title = "Enter Password") => {

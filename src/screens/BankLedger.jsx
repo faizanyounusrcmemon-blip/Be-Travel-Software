@@ -197,151 +197,190 @@ export default function BankLedger({ onNavigate }) {
     }
   };
 
-  /* ================= EDIT TRANSACTION ================= */
-  const editRow = async (row) => {
-    const formattedDateForInput = row.txn_date ? new Date(row.txn_date).toISOString().split("T")[0] : today;
-    const currentAmount = row.credit > 0 ? row.credit : row.debit;
-    const currentType = row.credit > 0 ? "deposit" : "withdraw";
-    const currentBankProfileId = row.bank_profile_id || selectedProfile || "";
+/* ================= EDIT TRANSACTION (2-STEP VERIFICATION FLOW) ================= */
+const editRow = async (row) => {
+  if (!row || !row.id) return;
 
-    const profileOptionsHTML = profiles
-      .map(
-        (p) =>
-          `<option value="${p.id}" ${String(p.id) === String(currentBankProfileId) ? "selected" : ""}>
-            ${p.bank_name} (${p.account_number})
-          </option>`
-      )
-      .join("");
+  // ----------------------------------------------------
+  // STEP 1: PASSWORD VERIFICATION POPUP
+  // ----------------------------------------------------
+  const passInput = await askPassword("🔐 Authorization Password Required");
+  if (!passInput) return; // User canceled or empty
 
-    const { value: formValues } = await Swal.fire({
-      width: "360px",
-      title: "✏️ Edit Bank Transaction",
-      html: `
-        <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
-          <div>
-            <label class="fw-bold mb-1">Transaction Date</label>
-            <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDateForInput}" />
-            <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
-              ${formatDate(formattedDateForInput)}
-            </div>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Bank Profile</label>
-            <select id="swal-edit-bank" class="form-select form-select-sm">
-              <option value="">Select Bank Profile</option>
-              ${profileOptionsHTML}
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Amount (PKR)</label>
-            <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${currentAmount || 0}" />
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Type</label>
-            <select id="swal-edit-type" class="form-select form-select-sm">
-              <option value="deposit" ${currentType === "deposit" ? "selected" : ""}>➕ Deposit</option>
-              <option value="withdraw" ${currentType === "withdraw" ? "selected" : ""}>➖ Withdraw</option>
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Comment / Description</label>
-            <input id="swal-edit-comment" type="text" class="form-control form-control-sm" value="${row.description || ""}" />
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Authorization Password</label>
-            <div style="position:relative;">
-              <input id="swal-edit-pass" type="password" class="form-control form-control-sm" placeholder="Password" style="padding-right:35px;" />
-              <span id="eye-toggle-edit" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; user-select:none;">👁</span>
-            </div>
+  // Verification loading state
+  Swal.fire({
+    width: "250px",
+    title: "Verifying...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  // Verify password with backend
+  try {
+    const verifyRes = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/bank-ledger/verify-password`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passInput }),
+      }
+    );
+    const verifyData = await verifyRes.json();
+
+    if (!verifyData.success) {
+      return Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: verifyData.error || "Incorrect Authorization Password!",
+      });
+    }
+  } catch (err) {
+    return Swal.fire({
+      width: "300px",
+      icon: "error",
+      text: "Network error during password verification",
+    });
+  }
+
+  // ----------------------------------------------------
+  // STEP 2: EDIT FORM POPUP (Password Verified True!)
+  // ----------------------------------------------------
+  const formattedDateForInput = row.txn_date
+    ? new Date(row.txn_date).toISOString().split("T")[0]
+    : today;
+  const currentAmount = row.credit > 0 ? row.credit : row.debit;
+  const currentType = row.credit > 0 ? "deposit" : "withdraw";
+  const currentBankProfileId = row.bank_profile_id || selectedProfile || "";
+
+  const profileOptionsHTML = profiles
+    .map(
+      (p) =>
+        `<option value="${p.id}" ${
+          String(p.id) === String(currentBankProfileId) ? "selected" : ""
+        }>
+          ${p.bank_name} (${p.account_number})
+        </option>`
+    )
+    .join("");
+
+  const { value: formValues } = await Swal.fire({
+    width: "360px",
+    title: "✏️ Edit Bank Transaction",
+    html: `
+      <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
+        <div>
+          <label class="fw-bold mb-1">Transaction Date</label>
+          <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDateForInput}" />
+          <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
+            ${formatDate(formattedDateForInput)}
           </div>
         </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Update Transaction",
-      focusConfirm: false,
-      didOpen: () => {
-        const input = document.getElementById("swal-edit-pass");
-        const eye = document.getElementById("eye-toggle-edit");
-        const dateInput = document.getElementById("swal-edit-date");
-        const dateTextLabel = document.getElementById("swal-edit-date-text");
+        <div>
+          <label class="fw-bold mb-1">Bank Profile</label>
+          <select id="swal-edit-bank" class="form-select form-select-sm">
+            <option value="">Select Bank Profile</option>
+            ${profileOptionsHTML}
+          </select>
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Amount (PKR)</label>
+          <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${currentAmount || 0}" />
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Type</label>
+          <select id="swal-edit-type" class="form-select form-select-sm">
+            <option value="deposit" ${currentType === "deposit" ? "selected" : ""}>➕ Deposit</option>
+            <option value="withdraw" ${currentType === "withdraw" ? "selected" : ""}>➖ Withdraw</option>
+          </select>
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Comment / Description</label>
+          <input id="swal-edit-comment" type="text" class="form-control form-control-sm" value="${row.description || ""}" />
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Update Transaction",
+    focusConfirm: false,
+    didOpen: () => {
+      const dateInput = document.getElementById("swal-edit-date");
+      const dateTextLabel = document.getElementById("swal-edit-date-text");
 
-        dateInput.addEventListener("change", (e) => {
-          dateTextLabel.textContent = formatDate(e.target.value);
-        });
+      dateInput.addEventListener("change", (e) => {
+        dateTextLabel.textContent = formatDate(e.target.value);
+      });
+    },
+    preConfirm: () => {
+      const txn_date = document.getElementById("swal-edit-date").value;
+      const bank_profile_id = document.getElementById("swal-edit-bank").value;
+      const amountVal = document.getElementById("swal-edit-amount").value;
+      const typeVal = document.getElementById("swal-edit-type").value;
+      const commentVal = document.getElementById("swal-edit-comment").value.trim();
 
-        let visible = false;
-        eye.addEventListener("click", () => {
-          visible = !visible;
-          input.type = visible ? "text" : "password";
-          eye.textContent = visible ? "🙈" : "👁";
-        });
-      },
-      preConfirm: () => {
-        const txn_date = document.getElementById("swal-edit-date").value;
-        const bank_profile_id = document.getElementById("swal-edit-bank").value;
-        const amountVal = document.getElementById("swal-edit-amount").value;
-        const typeVal = document.getElementById("swal-edit-type").value;
-        const commentVal = document.getElementById("swal-edit-comment").value.trim();
-        const password = document.getElementById("swal-edit-pass").value.trim();
+      if (!txn_date) {
+        Swal.showValidationMessage("Date required");
+        return false;
+      }
+      if (!bank_profile_id) {
+        Swal.showValidationMessage("Bank Profile required");
+        return false;
+      }
+      if (!amountVal || Number(amountVal) <= 0) {
+        Swal.showValidationMessage("Valid amount required");
+        return false;
+      }
 
-        if (!txn_date) {
-          Swal.showValidationMessage("Date required");
-          return false;
-        }
-        if (!bank_profile_id) {
-          Swal.showValidationMessage("Bank Profile required");
-          return false;
-        }
-        if (!amountVal || Number(amountVal) <= 0) {
-          Swal.showValidationMessage("Valid amount required");
-          return false;
-        }
-        if (!password) {
-          Swal.showValidationMessage("Password required");
-          return false;
-        }
+      return {
+        txn_date,
+        bank_profile_id,
+        amount: Number(amountVal),
+        type: typeVal,
+        comment: commentVal,
+      };
+    },
+  });
 
-        return {
-          txn_date,
-          bank_profile_id,
-          amount: Number(amountVal),
-          type: typeVal,
-          comment: commentVal,
-          password,
-        };
-      },
-    });
+  if (!formValues) return;
 
-    if (!formValues) return;
+  Swal.fire({
+    width: "260px",
+    title: "Updating...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
 
-    Swal.fire({
-      width: "260px",
-      title: "Updating...",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading(),
-    });
-
-    try {
-      const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/bank-ledger/transaction/${row.id}`, {
+  try {
+    const r = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/bank-ledger/transaction/${row.id}`,
+      {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formValues),
-      });
-
-      const d = await r.json();
-      Swal.close();
-
-      if (d.success) {
-        loadLedger();
-        Swal.fire({ width: "280px", icon: "success", text: "Transaction Updated Successfully" });
-      } else {
-        Swal.fire({ width: "300px", icon: "error", text: d.error || "Update Failed!" });
       }
-    } catch (err) {
-      Swal.close();
-      Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
+    );
+
+    const d = await r.json();
+    Swal.close();
+
+    if (d.success) {
+      loadLedger();
+      Swal.fire({
+        width: "280px",
+        icon: "success",
+        text: "Transaction Updated Successfully",
+      });
+    } else {
+      Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: d.error || "Update Failed!",
+      });
     }
-  };
+  } catch (err) {
+    Swal.close();
+    Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
+  }
+};
 
   /* ================= PASSWORD POPUP FOR DELETE ================= */
   const askPassword = async (title = "Enter Password") => {
@@ -537,20 +576,39 @@ export default function BankLedger({ onNavigate }) {
             </button>
           </div>
 
-          {/* BALANCE CARD */}
-          <div className="card shadow-sm mb-3 border-0 bg-light">
-            <div className="card-body d-flex justify-content-between align-items-center">
-              <div>
-                <small className="text-muted fw-bold">
-                  {selectedProfile ? "Selected Bank Balance" : "Account Balance"}
-                </small>
-                <h3 className="fw-bold text-success mb-0">
-                  {selectedProfile ? `PKR ${fmtAmount(currentBalance)}` : "Select a Bank Account"}
-                </h3>
-              </div>
-              <div className="fs-1">💳</div>
-            </div>
+{/* BALANCE CARD */}
+<div className="card shadow-sm mb-3 border-0 bg-light">
+  <div className="card-body d-flex justify-content-between align-items-center">
+    <div>
+      {/* selected profile details */}
+      {selectedProfile && (() => {
+        const activeBank = profiles.find((p) => String(p.id) === String(selectedProfile));
+        return activeBank ? (
+          <div className="mb-1">
+            <span className="fw-bold text-primary fs-5 d-block">
+              {activeBank.bank_name}
+            </span>
+            <small className="text-secondary fw-semibold">
+              {activeBank.account_title ? `${activeBank.account_title} - ` : ""}
+              {activeBank.account_number}
+            </small>
           </div>
+        ) : null;
+      })()}
+      
+      {/* Label */}
+      <small className="text-muted fw-bold d-block mt-1">
+        {selectedProfile ? "Selected Bank Balance" : "Account Balance"}
+      </small>
+
+      {/* Balance Amount */}
+      <h3 className="fw-bold text-success mb-0">
+        {selectedProfile ? `PKR ${fmtAmount(currentBalance)}` : "Select a Bank Account"}
+      </h3>
+    </div>
+    <div className="fs-1">💳</div>
+  </div>
+</div>
 
           {/* MESSAGE */}
           {msg && <div className={`alert alert-${msg.type} py-2`}>{msg.text}</div>}

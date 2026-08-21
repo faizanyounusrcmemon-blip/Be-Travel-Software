@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import Swal from "sweetalert2";
-import * as XLSX from "xlsx";
+import useLedgerExport from "../hooks/useLedgerExport";
 
 /* =========================
    HELPERS (NO -0 EVER)
@@ -54,6 +52,7 @@ const numberToWords = (num) => {
 const today = new Date().toISOString().split("T")[0];
 
 export default function SupplierLedger({ onNavigate }) {
+  const { exportPDF: handleExportPDF, exportExcel: handleExportExcel } = useLedgerExport();
   const [supplierCode, setSupplierCode] = useState("");
   const [ledger, setLedger] = useState([]);
   const [pending, setPending] = useState([]);
@@ -274,7 +273,7 @@ const loadPendingAlways = async () => {
   /* ====================================================
      DELETE ENTRY WITH PASSWORD
   ==================================================== */
-  const askPassword = async (title = "Enter Password") => {
+  const askPassword = async (title = "🔐 Enter Delete Password") => {
     const { value } = await Swal.fire({
       width: "300px",
       html: `
@@ -365,336 +364,275 @@ const loadPendingAlways = async () => {
   };
 
 /* ====================================================
-     EDIT ENTRY WITH TYPE & BANK SELECTION
-  ==================================================== */
-  const editEntry = async (entry) => {
-    if (entry.entry_type !== "payment" || !entry.id) return;
-
-    const formattedDate = entry.date ? new Date(entry.date).toISOString().split('T')[0] : today;
-
-    // Detect current type for pre-selecting in dropdown
-    let currentTypeVal = "payment";
-    const rawType = (entry.type || "").toLowerCase();
-    if (rawType.includes("opening")) {
-      currentTypeVal = "opening_balance";
-    } else if (rawType.includes("adjust")) {
-      currentTypeVal = "adjustment";
-    }
-
-    const { value: formValues } = await Swal.fire({
-      width: "360px",
-      title: "✏️ Edit Ledger Entry",
-      html: `
-        <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
-          <div>
-            <label class="fw-bold mb-1">Amount (PKR)</label>
-            <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${entry.debit || entry.credit || 0}" />
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Payment Date</label>
-            <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDate}" />
-            <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
-              ${formatDate(formattedDate)}
-            </div>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Entry Type</label>
-            <select id="swal-edit-type" class="form-select form-select-sm">
-              <option value="payment" ${currentTypeVal === "payment" ? "selected" : ""}>Payment</option>
-              <option value="adjustment" ${currentTypeVal === "adjustment" ? "selected" : ""}>Adjustment</option>
-              <option value="opening_balance" ${currentTypeVal === "opening_balance" ? "selected" : ""}>🔑 Opening Balance</option>
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Payment Method / Bank</label>
-            <select id="swal-edit-method" class="form-select form-select-sm">
-              <option value="Cash" ${!entry.bank_profile_id && entry.payment_method === "Cash" ? "selected" : ""}>
-                💵 Cash
-              </option>
-              ${
-                bankProfiles.length > 0
-                  ? bankProfiles
-                      .map(
-                        (p) => `
-                        <option 
-                          value="Bank_${p.id}" 
-                          ${entry.bank_profile_id == p.id ? "selected" : ""}
-                        >
-                          🏦 ${p.bank_name} (${p.account_number})
-                        </option>
-                      `
-                      )
-                      .join("")
-                  : `<option disabled>No Bank Profiles Found</option>`
-              }
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Password</label>
-            <div style="position:relative;">
-              <input id="swal-edit-pass" type="password" class="form-control form-control-sm" placeholder="Enter password" style="padding-right:35px;" />
-              <span id="toggle-edit-pass" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; user-select:none;">👁</span>
-            </div>
-          </div>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Update",
-      focusConfirm: false,
-      didOpen: () => {
-        const input = document.getElementById("swal-edit-pass");
-        const toggle = document.getElementById("toggle-edit-pass");
-        const dateInput = document.getElementById("swal-edit-date");
-        const dateTextLabel = document.getElementById("swal-edit-date-text");
-
-        dateInput.addEventListener("change", (e) => {
-          dateTextLabel.textContent = formatDate(e.target.value);
-        });
-
-        let show = false;
-        toggle.onclick = () => {
-          show = !show;
-          input.type = show ? "text" : "password";
-          toggle.textContent = show ? "🙈" : "👁";
-        };
-      },
-      preConfirm: () => {
-        const amount = document.getElementById("swal-edit-amount").value;
-        const payment_date = document.getElementById("swal-edit-date").value;
-        const selectedVal = document.getElementById("swal-edit-method").value;
-        const selectedType = document.getElementById("swal-edit-type").value;
-        const password = document.getElementById("swal-edit-pass").value.trim();
-
-        if (!amount || amount <= 0) {
-          Swal.showValidationMessage("Valid amount required");
-          return false;
-        }
-        if (!password) {
-          Swal.showValidationMessage("Password required");
-          return false;
-        }
-
-        let payment_method = "Cash";
-        let bank_profile_id = null;
-
-        if (selectedVal.startsWith("Bank_")) {
-          payment_method = "Bank";
-          bank_profile_id = selectedVal.split("_")[1];
-        }
-
-        return {
-          amount: Number(amount),
-          payment_date,
-          payment_method,
-          bank_profile_id,
-          password,
-          type: selectedType // ✨ Sends exact selected type ('payment', 'adjustment', 'opening_balance')
-        };
-      }
-    });
-
-    if (!formValues) return;
-
-    Swal.fire({
-      width: "260px",
-      title: "Updating...",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
-    });
-
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/api/supplier-ledger/edit/${entry.id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formValues),
-        }
-      );
-
-      const d = await res.json();
-      Swal.close();
-
-      if (!d.success) {
-        Swal.fire({ icon: "error", text: d.error || "Update failed" });
-        return;
-      }
-
-      await loadLedger();
-      await loadPendingAlways();
-      Swal.fire({ icon: "success", text: "Entry updated successfully" });
-    } catch (err) {
-      Swal.close();
-      Swal.fire({ icon: "error", text: "Network Error" });
-    }
-  };
-
-/* ====================================================
-   EXPORT PDF FUNCTION (DYNAMIC PAGE NUMBERS)
+   EDIT ENTRY (2-STEP VERIFICATION FLOW)
 ==================================================== */
-const exportPDF = async () => {
-  if (!ledgerView || ledgerView.length === 0) {
-    return Swal.fire({ icon: "warning", text: "No ledger data to export!" });
+const editEntry = async (entry) => {
+  if (entry.entry_type !== "payment" || !entry.id) return;
+
+  // ----------------------------------------------------
+  // STEP 1: PASSWORD VERIFICATION POPUP
+  // ----------------------------------------------------
+  const { value: passInput } = await Swal.fire({
+    width: "320px",
+    title: "🔐 Enter Edit Password",
+    html: `
+      <div style="text-align:left;">
+        <label style="font-size:13px; font-weight:bold;">Enter Password to Unlock Edit:</label>
+        <div style="position:relative; margin-top:8px;">
+          <input id="swal-edit-auth-pass" type="password" class="swal2-input" 
+            style="width:100%; height:38px; margin:0; padding-right:40px; font-size:14px;" placeholder="Password" />
+          <span id="eye-toggle-auth" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:16px; user-select:none;">👁</span>
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Verify Password",
+    preConfirm: () => {
+      const val = document.getElementById("swal-edit-auth-pass").value;
+      if (!val) {
+        Swal.showValidationMessage("Password cannot be empty");
+        return false;
+      }
+      return val;
+    },
+    didOpen: () => {
+      const input = document.getElementById("swal-edit-auth-pass");
+      const eye = document.getElementById("eye-toggle-auth");
+      let visible = false;
+      eye.addEventListener("click", () => {
+        visible = !visible;
+        input.type = visible ? "text" : "password";
+        eye.textContent = visible ? "🙈" : "👁";
+      });
+    },
+  });
+
+  if (!passInput) return; // Agar user cancel kare ya enter na kare
+
+  // Verification loading state
+  Swal.fire({
+    width: "250px",
+    title: "Verifying...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  // Verify password with backend
+  try {
+    const verifyRes = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/supplier-ledger/verify-password`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passInput }),
+      }
+    );
+    const verifyData = await verifyRes.json();
+
+    if (!verifyData.success) {
+      return Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: verifyData.error || "Incorrect Authorization Password!",
+      });
+    }
+  } catch (err) {
+    return Swal.fire({
+      width: "300px",
+      icon: "error",
+      text: "Network error during password verification",
+    });
   }
 
+  // ----------------------------------------------------
+  // STEP 2: EDIT FORM POPUP (Password Verified True!)
+  // ----------------------------------------------------
+  const formattedDate = entry.date
+    ? new Date(entry.date).toISOString().split("T")[0]
+    : today;
+
+  let currentTypeVal = "payment";
+  const rawType = (entry.type || "").toLowerCase();
+  if (rawType.includes("opening")) {
+    currentTypeVal = "opening_balance";
+  } else if (rawType.includes("adjust")) {
+    currentTypeVal = "adjustment";
+  }
+
+  const { value: formValues } = await Swal.fire({
+    width: "360px",
+    title: "✏️ Edit Ledger Entry",
+    html: `
+      <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
+        <div>
+          <label class="fw-bold mb-1">Amount (PKR)</label>
+          <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${
+            entry.debit || entry.credit || 0
+          }" />
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Payment Date</label>
+          <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDate}" />
+          <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
+            ${formatDate(formattedDate)}
+          </div>
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Entry Type</label>
+          <select id="swal-edit-type" class="form-select form-select-sm">
+            <option value="payment" ${
+              currentTypeVal === "payment" ? "selected" : ""
+            }>Payment</option>
+            <option value="adjustment" ${
+              currentTypeVal === "adjustment" ? "selected" : ""
+            }>Adjustment</option>
+            <option value="opening_balance" ${
+              currentTypeVal === "opening_balance" ? "selected" : ""
+            }>🔑 Opening Balance</option>
+          </select>
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Payment Method / Bank</label>
+          <select id="swal-edit-method" class="form-select form-select-sm">
+            <option value="Cash" ${
+              !entry.bank_profile_id && entry.payment_method === "Cash"
+                ? "selected"
+                : ""
+            }>
+              💵 Cash
+            </option>
+            ${
+              bankProfiles.length > 0
+                ? bankProfiles
+                    .map(
+                      (p) => `
+                      <option 
+                        value="Bank_${p.id}" 
+                        ${entry.bank_profile_id == p.id ? "selected" : ""}
+                      >
+                        🏦 ${p.bank_name} (${p.account_number})
+                      </option>
+                    `
+                    )
+                    .join("")
+                : `<option disabled>No Bank Profiles Found</option>`
+            }
+          </select>
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Update Entry",
+    focusConfirm: false,
+    didOpen: () => {
+      const dateInput = document.getElementById("swal-edit-date");
+      const dateTextLabel = document.getElementById("swal-edit-date-text");
+
+      dateInput.addEventListener("change", (e) => {
+        dateTextLabel.textContent = formatDate(e.target.value);
+      });
+    },
+    preConfirm: () => {
+      const amount = document.getElementById("swal-edit-amount").value;
+      const payment_date = document.getElementById("swal-edit-date").value;
+      const selectedVal = document.getElementById("swal-edit-method").value;
+      const selectedType = document.getElementById("swal-edit-type").value;
+
+      if (!amount || Number(amount) <= 0) {
+        Swal.showValidationMessage("Valid amount required");
+        return false;
+      }
+
+      let payment_method = "Cash";
+      let bank_profile_id = null;
+
+      if (selectedVal.startsWith("Bank_")) {
+        payment_method = "Bank";
+        bank_profile_id = selectedVal.split("_")[1];
+      }
+
+      return {
+        amount: Number(amount),
+        payment_date,
+        payment_method,
+        bank_profile_id,
+        type: selectedType,
+      };
+    },
+  });
+
+  if (!formValues) return;
+
+  // Submit updated values
   Swal.fire({
-    width: "260px",
-    title: "Generating PDF...",
+    width: "250px",
+    title: "Updating...",
     allowOutsideClick: false,
-    didOpen: () => Swal.showLoading()
+    didOpen: () => Swal.showLoading(),
   });
 
   try {
-    const doc = new jsPDF("p", "mm", "a4");
-    const supplierName = pending?.find(p => p.supplier_code === supplierCode)?.supplier_name || "N/A";
-    const printDate = formatDate(today);
-
-    // 1. Header Banner & Info Box Function
-    const renderPageHeader = () => {
-      // Blue Header Banner
-      doc.setFillColor(13, 71, 161);
-      doc.rect(0, 0, 210, 28, "F");
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("BE TRAVEL & TOURS", 105, 12, { align: "center" });
-
-      // Supplier Info Box (Gray Background)
-      doc.setFillColor(245, 247, 250);
-      doc.rect(10, 32, 190, 22, "F");
-
-      doc.setTextColor(40, 40, 40);
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.text(`SUPPLIER NAME: ${supplierName.toUpperCase()}`, 14, 40);
-      doc.text(`SUPPLIER CODE: ${supplierCode || "-"}`, 14, 48);
-
-      doc.setFont("helvetica", "normal");
-      doc.text(`Statement Period: ${fromDate && toDate ? `${formatDate(fromDate)} to ${formatDate(toDate)}` : "All Records"}`, 130, 40);
-      doc.text(`Printed On: ${printDate}`, 130, 48);
-    };
-
-    // 2. Table Header Function
-    const renderTableHeader = (startY) => {
-      doc.setFillColor(33, 37, 41);
-      doc.rect(10, startY, 190, 8, "F");
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-
-      doc.text("Date", 14, startY + 5.5);
-      doc.text("Description", 45, startY + 5.5);
-      doc.text("Debit (-)", 135, startY + 5.5, { align: "right" });
-      doc.text("Credit (+)", 165, startY + 5.5, { align: "right" });
-      doc.text("Balance", 195, startY + 5.5, { align: "right" });
-    };
-
-    renderPageHeader();
-    let y = 60;
-    renderTableHeader(y);
-    y += 8;
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(30, 30, 30);
-
-    // 3. Render Table Rows
-    ledgerView.forEach((row) => {
-      // Check page break height
-      if (y > 270) {
-        doc.addPage();
-        renderPageHeader();
-        y = 60;
-        renderTableHeader(y);
-        y += 8;
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(30, 30, 30);
+    const res = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/supplier-ledger/edit/${entry.id}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formValues),
       }
+    );
 
-      const itemDetail = row.type === "purchase" ? (row.detail || "Purchase Entry") : (row.description || row.type);
+    const d = await res.json();
+    Swal.close();
 
-      doc.text(formatDate(row.date), 14, y + 5);
-      doc.text(String(itemDetail).substring(0, 45), 45, y + 5);
-      doc.text(row.debit ? fmtAmt(row.debit) : "-", 135, y + 5, { align: "right" });
-      doc.text(row.credit ? fmtAmt(row.credit) : "-", 165, y + 5, { align: "right" });
-      doc.setFont("helvetica", "bold");
-      doc.text(fmtAmt(row.balance), 195, y + 5, { align: "right" });
-      doc.setFont("helvetica", "normal");
-
-      doc.setDrawColor(230, 230, 230);
-      doc.line(10, y + 7, 200, y + 7);
-
-      y += 8;
-    });
-
-    // 4. DYNAMIC PAGE NUMBERING (Loop through total generated pages)
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      
-      // Page number dynamically written based on total pages
-      doc.text(`SUPPLIER LEDGER STATEMENT — Page ${i} of ${totalPages}`, 105, 20, { align: "center" });
+    if (!d.success) {
+      Swal.fire({ icon: "error", text: d.error || "Update failed" });
+      return;
     }
 
-    // Save File
-    doc.save(`Ledger-${supplierCode || "SUPPLIER"}-${supplierName.replace(/\s+/g, '_')}.pdf`);
-    Swal.close();
+    await loadLedger();
+    await loadPendingAlways();
+    Swal.fire({ icon: "success", text: "Entry updated successfully" });
   } catch (err) {
-    console.error("PDF Export Error:", err);
     Swal.close();
-    Swal.fire({ icon: "error", text: "Failed to generate PDF" });
+    Swal.fire({ icon: "error", text: "Network Error" });
   }
 };
 
-/* ====================================================
-   EXPORT EXCEL FUNCTION (WITH HEADER TITLE & INFO)
-==================================================== */
+/* ✅ CORRECTED EXPORT FUNCTIONS */
+const exportPDF = () => {
+  if (!supplierCode) {
+    return Swal.fire({ icon: "warning", text: "Please load a supplier first!" });
+  }
+
+  // Pending list se supplier ka name find kar rahe hain
+  const currentSupplier = pending.find((p) => p.supplier_code === supplierCode);
+
+  handleExportPDF({
+    code: supplierCode,
+    name: currentSupplier ? currentSupplier.supplier_name : "Supplier",
+    fromDate: fromDate,
+    toDate: toDate,
+    ledgerData: ledgerView,
+    companyName: "BE TRAVEL & TOURS",
+    title: "SUPPLIER LEDGER STATEMENT",
+  });
+};
+
 const exportExcel = () => {
-  if (!ledgerView || ledgerView.length === 0) {
-    return Swal.fire({ icon: "warning", text: "No ledger data to export!" });
+  if (!supplierCode) {
+    return Swal.fire({ icon: "warning", text: "Please load a supplier first!" });
   }
 
-  try {
-    const supplierName = pending?.find(p => p.supplier_code === supplierCode)?.supplier_name || "N/A";
+  const currentSupplier = pending.find((p) => p.supplier_code === supplierCode);
 
-    // Build custom rows for Excel including Title Header
-    const excelRows = [
-      ["BE TRAVEL & TOURS"],
-      ["SUPPLIER LEDGER STATEMENT"],
-      [],
-      [`SUPPLIER NAME: ${supplierName}`, "", `Printed On: ${formatDate(today)}`],
-      [`SUPPLIER CODE: ${supplierCode || "-"}`, "", `Statement Period: ${fromDate && toDate ? `${formatDate(fromDate)} to ${formatDate(toDate)}` : "All Records"}`],
-      [],
-      ["Date", "Type", "Ref No", "Description", "Payment Method", "Debit (-)", "Credit (+)", "Balance"]
-    ];
-
-    // Append Table Rows
-    ledgerView.forEach((r) => {
-      excelRows.push([
-        formatDate(r.date),
-        r.type || "-",
-        r.ref_no || "-",
-        r.detail || r.description || "-",
-        r.payment_method || "-",
-        r.debit || 0,
-        r.credit || 0,
-        r.balance || 0
-      ]);
-    });
-
-    const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Supplier Ledger");
-
-    XLSX.writeFile(workbook, `Ledger_${supplierCode || "SUPPLIER"}.xlsx`);
-  } catch (err) {
-    console.error("Excel Export Error:", err);
-    Swal.fire({ icon: "error", text: "Failed to export Excel file" });
-  }
+  handleExportExcel({
+    code: supplierCode,
+    name: currentSupplier ? currentSupplier.supplier_name : "Supplier",
+    fromDate: fromDate,
+    toDate: toDate,
+    ledgerData: ledgerView,
+    title: "SUPPLIER FINANCIAL LEDGER",
+  });
 };
 
   return (

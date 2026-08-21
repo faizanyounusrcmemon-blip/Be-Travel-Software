@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import useLedgerExport from "../hooks/useLedgerExport";
 import Swal from "sweetalert2";
 
 const toInputDate = (d) => {
@@ -59,6 +58,11 @@ const numberToWords = (num) => {
 const today = new Date().toISOString().split("T")[0];
 
 export default function CustomerLedger({ onNavigate }) {
+  // Hook initialization
+  const exportUtils = useLedgerExport();
+  const handleExportPDF = exportUtils?.handleExportPDF || exportUtils?.exportPDF;
+  const handleExportExcel = exportUtils?.handleExportExcel || exportUtils?.exportExcel;
+
   const [refNo, setRefNo] = useState("");
   const [rows, setRows] = useState([]);
   const [pending, setPending] = useState([]);
@@ -192,68 +196,68 @@ export default function CustomerLedger({ onNavigate }) {
     }
   };
 
-/* =========================
-   SAVE ENTRY
-========================== */
-const saveEntry = async () => {
-  if (!refNo) {
-    return Swal.fire({ width: "300px", icon: "warning", text: "Ref No required" });
-  }
-  if (!amountRaw || amountRaw <= 0) {
-    return Swal.fire({ width: "300px", icon: "warning", text: "Amount required" });
-  }
-  if (!date) {
-    return Swal.fire({ width: "300px", icon: "warning", text: "Date required" });
-  }
-  if (method === "Bank" && !selectedBankProfile) {
-    return Swal.fire({ width: "300px", icon: "warning", text: "Please select a Bank Profile" });
-  }
+  /* =========================
+     SAVE ENTRY
+  ========================== */
+  const saveEntry = async () => {
+    if (!refNo) {
+      return Swal.fire({ width: "300px", icon: "warning", text: "Ref No required" });
+    }
+    if (!amountRaw || amountRaw <= 0) {
+      return Swal.fire({ width: "300px", icon: "warning", text: "Amount required" });
+    }
+    if (!date) {
+      return Swal.fire({ width: "300px", icon: "warning", text: "Date required" });
+    }
+    if (method === "Bank" && !selectedBankProfile) {
+      return Swal.fire({ width: "300px", icon: "warning", text: "Please select a Bank Profile" });
+    }
 
-  setSaving(true);
-  Swal.fire({
-    width: "260px",
-    title: "Saving...",
-    allowOutsideClick: false,
-    didOpen: () => Swal.showLoading()
-  });
-
-  try {
-    const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/customer-ledger/payment`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ref_no: refNo,
-        amount: Number(amountRaw),
-        payment_date: date,
-        payment_method: method,
-        bank_profile_id: method === "Bank" ? selectedBankProfile : null, // 👈 Fix: bank_profile_id Send kar rahe hain
-        type
-      }),
+    setSaving(true);
+    Swal.fire({
+      width: "260px",
+      title: "Saving...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
     });
 
-    const d = await r.json();
-    Swal.close();
+    try {
+      const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/customer-ledger/payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ref_no: refNo,
+          amount: Number(amountRaw),
+          payment_date: date,
+          payment_method: method,
+          bank_profile_id: method === "Bank" ? selectedBankProfile : null,
+          type
+        }),
+      });
 
-    if (!d.success) {
-      Swal.fire({ width: "300px", icon: "error", text: d.error || "Save failed" });
-    } else {
-      setAmountRaw(0);
-      setAmountDisp("");
-      setDate(today);
-      setSelectedBankProfile("");
+      const d = await r.json();
+      Swal.close();
 
-      await loadLedger(refNo);
-      await loadPending();
+      if (!d.success) {
+        Swal.fire({ width: "300px", icon: "error", text: d.error || "Save failed" });
+      } else {
+        setAmountRaw(0);
+        setAmountDisp("");
+        setDate(today);
+        setSelectedBankProfile("");
 
-      Swal.fire({ width: "280px", icon: "success", text: "Entry Saved Successfully" });
+        await loadLedger(refNo);
+        await loadPending();
+
+        Swal.fire({ width: "280px", icon: "success", text: "Entry Saved Successfully" });
+      }
+    } catch (err) {
+      Swal.close();
+      Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    Swal.close();
-    Swal.fire({ width: "300px", icon: "error", text: "Network Error" });
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const askPassword = async (title = "Enter Password") => {
     const { value } = await Swal.fire({
@@ -269,7 +273,7 @@ const saveEntry = async () => {
         </div>
       `,
       showCancelButton: true,
-      confirmButtonText: "Delete",
+      confirmButtonText: "Confirm",
       focusConfirm: false,
       preConfirm: () => {
         const input = document.getElementById("swal-pass");
@@ -309,7 +313,7 @@ const saveEntry = async () => {
 
     if (!confirmDelete.isConfirmed) return;
 
-    const pass = await askPassword("Enter Delete Password");
+    const pass = await askPassword("🔐 Enter Delete Password");
     if (!pass) return;
 
     Swal.fire({
@@ -342,15 +346,49 @@ const saveEntry = async () => {
     }
   };
 
-  /* =========================
-     EDIT PAYMENT ENTRY
-  ========================== */
+  /* ================= EDIT PAYMENT ENTRY ================= */
   const editRow = async (row) => {
     if (row.id === "SALE" || row.id === "CUSTOMER") {
       return Swal.fire({
         width: "300px",
         icon: "warning",
         text: "Yeh system invoice record edit nahi ho sakta."
+      });
+    }
+
+    const passInput = await askPassword("🔐 Enter Edit Password");
+    if (!passInput) return;
+
+    Swal.fire({
+      width: "250px",
+      title: "Verifying...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+      const verifyRes = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/customer-ledger/verify-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: passInput }),
+        }
+      );
+      const verifyData = await verifyRes.json();
+
+      if (!verifyData.success) {
+        return Swal.fire({
+          width: "300px",
+          icon: "error",
+          text: verifyData.error || "Incorrect Authorization Password!",
+        });
+      }
+    } catch (err) {
+      return Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: "Network error during password verification",
       });
     }
 
@@ -383,12 +421,9 @@ const saveEntry = async () => {
           <div>
             <label class="fw-bold mb-1">Payment Method / Bank</label>
             <select id="swal-edit-method" class="form-select form-select-sm">
-              <!-- Cash Option -->
               <option value="Cash" ${!row.bank_profile_id && (row.description?.includes("Cash") || !row.description?.includes("Bank")) ? "selected" : ""}>
                 💵 Cash
               </option>
-
-              <!-- Bank Profiles List -->
               ${
                 bankProfiles.length > 0
                   ? bankProfiles
@@ -407,33 +442,17 @@ const saveEntry = async () => {
               }
             </select>
           </div>
-          <div>
-            <label class="fw-bold mb-1">Authorization Password</label>
-            <div style="position:relative;">
-              <input id="swal-edit-pass" type="password" class="form-control form-control-sm" placeholder="Password" style="padding-right:35px;" />
-              <span id="eye-toggle-edit" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; user-select:none;">👁</span>
-            </div>
-          </div>
         </div>
       `,
       showCancelButton: true,
       confirmButtonText: "Update Entry",
       focusConfirm: false,
       didOpen: () => {
-        const input = document.getElementById("swal-edit-pass");
-        const eye = document.getElementById("eye-toggle-edit");
         const dateInput = document.getElementById("swal-edit-date");
         const dateTextLabel = document.getElementById("swal-edit-date-text");
 
         dateInput.addEventListener("change", (e) => {
           dateTextLabel.textContent = formatDate(e.target.value);
-        });
-
-        let visible = false;
-        eye.addEventListener("click", () => {
-          visible = !visible;
-          input.type = visible ? "text" : "password";
-          eye.textContent = visible ? "🙈" : "👁";
         });
       },
       preConfirm: () => {
@@ -441,7 +460,6 @@ const saveEntry = async () => {
         const payment_date = document.getElementById("swal-edit-date").value;
         const type = document.getElementById("swal-edit-type").value;
         const selectedVal = document.getElementById("swal-edit-method").value;
-        const password = document.getElementById("swal-edit-pass").value.trim();
 
         if (!amount || Number(amount) <= 0) {
           Swal.showValidationMessage("Valid amount required");
@@ -449,10 +467,6 @@ const saveEntry = async () => {
         }
         if (!payment_date) {
           Swal.showValidationMessage("Date required");
-          return false;
-        }
-        if (!password) {
-          Swal.showValidationMessage("Password required");
           return false;
         }
 
@@ -470,7 +484,6 @@ const saveEntry = async () => {
           type,
           payment_method,
           bank_profile_id,
-          password
         };
       }
     });
@@ -507,33 +520,57 @@ const saveEntry = async () => {
     }
   };
 
-  const exportPDF = async () => {
-    if (!pdfRef.current) return;
-    const canvas = await html2canvas(pdfRef.current, { scale: 3 });
-    const img = canvas.toDataURL("image/png");
+  /* =========================
+     EXPORT FUNCTIONS (PDF & EXCEL)
+  ========================== */
+  const exportPDF = () => {
+    if (!refNo || rows.length === 0) {
+      return Swal.fire({ width: "300px", icon: "warning", text: "Please load a ledger first!" });
+    }
 
-    const pdf = new jsPDF("p", "mm", "a4");
-    const w = pdf.internal.pageSize.getWidth();
-
-    pdf.setFillColor(18, 97, 160);
-    pdf.rect(0, 0, w, 25, "F");
-
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFontSize(16);
-    pdf.text("BE TRAVEL & TOURS", w / 2, 15, { align: "center" });
-    pdf.setFontSize(10);
-    pdf.text("Customer Ledger Statement", w / 2, 22, { align: "center" });
-
-    pdf.addImage(img, "PNG", 10, 30, 190, (canvas.height * 190) / canvas.width);
+    if (typeof handleExportPDF !== "function") {
+      return Swal.fire({ width: "300px", icon: "error", text: "PDF Export Hook Function Error!" });
+    }
 
     let customerName = "Customer";
     const customerRow = rows.find((r) => r.id === "CUSTOMER");
-    if (customerRow && customerRow.description) {
-      customerName = customerRow.description
-        .replace(/[^a-zA-Z0-9 ]/g, "")
-        .replace(/\s+/g, "_");
+    if (customerRow?.description) {
+      customerName = customerRow.description;
     }
-    pdf.save(`${refNo}-${customerName}-Ledger.pdf`);
+
+    handleExportPDF({
+      code: refNo,
+      name: customerName,
+      fromDate: "",
+      toDate: "",
+      ledgerData: rows,
+      title: "CUSTOMER LEDGER STATEMENT",
+    });
+  };
+
+  const exportExcel = () => {
+    if (!refNo || rows.length === 0) {
+      return Swal.fire({ width: "300px", icon: "warning", text: "Please load a ledger first!" });
+    }
+
+    if (typeof handleExportExcel !== "function") {
+      return Swal.fire({ width: "300px", icon: "error", text: "Excel Export Hook Function Error!" });
+    }
+
+    let customerName = "Customer";
+    const customerRow = rows.find((r) => r.id === "CUSTOMER");
+    if (customerRow?.description) {
+      customerName = customerRow.description;
+    }
+
+    handleExportExcel({
+      code: refNo,
+      name: customerName,
+      fromDate: "",
+      toDate: "",
+      ledgerData: rows,
+      title: "CUSTOMER FINANCIAL LEDGER",
+    });
   };
 
   return (
@@ -599,7 +636,7 @@ const saveEntry = async () => {
           <div className="card shadow-sm mb-3">
             <div className="card-body py-3">
               <div className="row g-2">
-                <div className="col-md-6">
+                <div className="col-md-5">
                   <input
                     className="form-control form-control-lg"
                     placeholder="Enter Reference Number (e.g., PKG-1002)"
@@ -608,11 +645,26 @@ const saveEntry = async () => {
                   />
                 </div>
                 <div className="col-md-3">
-                  <button className="btn btn-primary btn-lg w-100 fw-bold" onClick={() => loadLedger()}>🔍 Load Ledger</button>
+                  <button className="btn btn-primary btn-lg w-100 fw-bold" onClick={() => loadLedger()}>
+                    🔍 Load Ledger
+                  </button>
                 </div>
-                <div className="col-md-3">
-                  <button className="btn btn-success btn-lg w-100 fw-bold" onClick={exportPDF} disabled={rows.length === 0}>
-                    📄 Export PDF
+                <div className="col-md-2">
+                  <button
+                    className="btn btn-danger btn-lg w-100 fw-bold"
+                    onClick={exportPDF}
+                    disabled={rows.length === 0}
+                  >
+                    📄 PDF
+                  </button>
+                </div>
+                <div className="col-md-2">
+                  <button
+                    className="btn btn-success btn-lg w-100 fw-bold"
+                    onClick={exportExcel}
+                    disabled={rows.length === 0}
+                  >
+                    📊 Excel
                   </button>
                 </div>
               </div>

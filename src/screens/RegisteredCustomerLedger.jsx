@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
-import jsPDF from "jspdf";
+import useLedgerExport from "../hooks/useLedgerExport";
 import Swal from "sweetalert2";
-import * as XLSX from "xlsx";
 
 /* ================= DATE HELPER FUNCTIONS ================= */
 
@@ -56,6 +55,7 @@ const numberToWords = (num) => {
 const getTodayInputDate = () => toInputDate(new Date());
 
 export default function RegisteredCustomerLedger({ onNavigate }) {
+  const { exportPDF: handleExportPDF, exportExcel: handleExportExcel } = useLedgerExport();
   const [customerCode, setCustomerCode] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [rows, setRows] = useState([]);
@@ -426,7 +426,7 @@ const fetchSaleDetail = async (id, description) => {
       width: "320px",
       html: `
         <div style="text-align:left;">
-          <label style="font-size:13px; font-weight:bold;">Enter Authorization Password:</label>
+          <label style="font-size:13px; font-weight:bold;">🔐Enter Delete Password:</label>
           <div style="position:relative; margin-top:8px;">
             <input id="swal-pass" type="password" class="swal2-input" 
               style="width:100%; height:38px; margin:0; padding-right:40px; font-size:14px;" placeholder="Password" />
@@ -489,372 +489,280 @@ const fetchSaleDetail = async (id, description) => {
   };
 
 /* =========================
-     EDIT ROW (FIXED WITH TYPE SELECTOR)
-  ========================== */
-  const editRow = async (row) => {
-    if (String(row.id).startsWith("SALE-") || String(row.id).startsWith("TIC-") || String(row.id).startsWith("HOT-")) {
-      return Swal.fire({ width: "300px", icon: "warning", text: "Invoice entry cannot be edited here. Edit from original module." });
+   EDIT ROW (2-STEP VERIFICATION FLOW)
+========================== */
+const editRow = async (row) => {
+  if (
+    String(row.id).startsWith("SALE-") ||
+    String(row.id).startsWith("TIC-") ||
+    String(row.id).startsWith("HOT-")
+  ) {
+    return Swal.fire({
+      width: "300px",
+      icon: "warning",
+      text: "Invoice entry cannot be edited here. Edit from original module.",
+    });
+  }
+
+  // ----------------------------------------------------
+  // STEP 1: PASSWORD VERIFICATION POPUP
+  // ----------------------------------------------------
+  const { value: passInput } = await Swal.fire({
+    width: "320px",
+    title: "🔐 Enter Edit Password",
+    html: `
+      <div style="text-align:left;">
+        <label style="font-size:13px; font-weight:bold;">Enter Password to Unlock Edit:</label>
+        <div style="position:relative; margin-top:8px;">
+          <input id="swal-edit-auth-pass" type="password" class="swal2-input" 
+            style="width:100%; height:38px; margin:0; padding-right:40px; font-size:14px;" placeholder="Password" />
+          <span id="eye-toggle-auth" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:16px; user-select:none;">👁</span>
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Verify Password",
+    preConfirm: () => {
+      const val = document.getElementById("swal-edit-auth-pass").value;
+      if (!val) {
+        Swal.showValidationMessage("Password cannot be empty");
+        return false;
+      }
+      return val;
+    },
+    didOpen: () => {
+      const input = document.getElementById("swal-edit-auth-pass");
+      const eye = document.getElementById("eye-toggle-auth");
+      let visible = false;
+      eye.addEventListener("click", () => {
+        visible = !visible;
+        input.type = visible ? "text" : "password";
+        eye.textContent = visible ? "🙈" : "👁";
+      });
+    },
+  });
+
+  if (!passInput) return; // Agar user cancel kare ya password na daale
+
+  // Password verify hote hi brief loading indicator
+  Swal.fire({
+    width: "250px",
+    title: "Verifying...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  // Backend password check
+  try {
+    const verifyRes = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/registered-ledger/verify-password`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passInput }),
+      }
+    );
+    const verifyData = await verifyRes.json();
+
+    if (!verifyData.success) {
+      return Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: verifyData.error || "Incorrect Authorization Password!",
+      });
     }
+  } catch (err) {
+    return Swal.fire({
+      width: "300px",
+      icon: "error",
+      text: "Network error during password verification",
+    });
+  }
 
-    const formattedDate = toInputDate(row.date || row.payment_date) || getTodayInputDate();
-    const currentType = row.type || "payment";
+  // ----------------------------------------------------
+  // STEP 2: EDIT FORM POPUP (Password Verified True!)
+  // ----------------------------------------------------
+  const formattedDate =
+    toInputDate(row.date || row.payment_date) || getTodayInputDate();
+  const currentType = row.type || "payment";
 
-    const { value: formValues } = await Swal.fire({
-      width: "360px",
-      title: "✏️ Edit Payment Entry",
-      html: `
-        <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
-          <div>
-            <label class="fw-bold mb-1">Amount (PKR)</label>
-            <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${row.debit || row.credit || 0}" />
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Transaction Type</label>
-            <select id="swal-edit-type" class="form-select form-select-sm">
-              <option value="payment" ${currentType === "payment" ? "selected" : ""}>payment</option>
-              <option value="adjustment" ${currentType === "adjustment" ? "selected" : ""}>adjustment</option>
-              <option value="opening_balance" ${currentType === "opening_balance" ? "selected" : ""}>🔑 opening_balance (Credit)</option>
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Receipt Date</label>
-            <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDate}" />
-            <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
-              ${formatDate(formattedDate)}
-            </div>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Payment Method / Bank</label>
-            <select id="swal-edit-method" class="form-select form-select-sm">
-              <option value="Cash" ${!row.bank_profile_id && (row.description?.includes("Cash") || !row.description?.includes("Bank")) ? "selected" : ""}>💵 Cash</option>
-              ${
-                bankProfiles.length > 0
-                  ? bankProfiles
-                      .map(
-                        (p) => `
-                        <option 
-                          value="Bank_${p.id}" 
-                          ${row.bank_profile_id == p.id ? "selected" : ""}
-                        >
-                          🏦 ${p.bank_name} (${p.account_number})
-                        </option>
-                      `
-                      )
-                      .join("")
-                  : `<option disabled>No Bank Profiles Found</option>`
-              }
-            </select>
-          </div>
-          <div>
-            <label class="fw-bold mb-1">Authorization Password</label>
-            <div style="position:relative;">
-              <input id="swal-edit-pass" type="password" class="form-control form-control-sm" placeholder="Password" style="padding-right:35px;" />
-              <span id="eye-toggle-edit" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; user-select:none;">👁</span>
-            </div>
+  const { value: formValues } = await Swal.fire({
+    width: "360px",
+    title: "✏️ Edit Payment Entry",
+    html: `
+      <div style="text-align:left; font-size:12px;" class="d-flex flex-column gap-2">
+        <div>
+          <label class="fw-bold mb-1">Amount (PKR)</label>
+          <input id="swal-edit-amount" type="number" class="form-control form-control-sm" value="${
+            row.debit || row.credit || 0
+          }" />
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Transaction Type</label>
+          <select id="swal-edit-type" class="form-select form-select-sm">
+            <option value="payment" ${
+              currentType === "payment" ? "selected" : ""
+            }>payment</option>
+            <option value="adjustment" ${
+              currentType === "adjustment" ? "selected" : ""
+            }>adjustment</option>
+            <option value="opening_balance" ${
+              currentType === "opening_balance" ? "selected" : ""
+            }>🔑 opening_balance (Credit)</option>
+          </select>
+        </div>
+        <div>
+          <label class="fw-bold mb-1">Receipt Date</label>
+          <input id="swal-edit-date" type="date" class="form-control form-control-sm" value="${formattedDate}" />
+          <div id="swal-edit-date-text" class="text-primary fw-bold mt-1" style="font-size: 11px;">
+            ${formatDate(formattedDate)}
           </div>
         </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Update Entry",
-      focusConfirm: false,
-      didOpen: () => {
-        const input = document.getElementById("swal-edit-pass");
-        const eye = document.getElementById("eye-toggle-edit");
-        const dateInput = document.getElementById("swal-edit-date");
-        const dateTextLabel = document.getElementById("swal-edit-date-text");
+        <div>
+          <label class="fw-bold mb-1">Payment Method / Bank</label>
+          <select id="swal-edit-method" class="form-select form-select-sm">
+            <option value="Cash" ${
+              !row.bank_profile_id &&
+              (row.description?.includes("Cash") ||
+                !row.description?.includes("Bank"))
+                ? "selected"
+                : ""
+            }>💵 Cash</option>
+            ${
+              bankProfiles.length > 0
+                ? bankProfiles
+                    .map(
+                      (p) => `
+                      <option 
+                        value="Bank_${p.id}" 
+                        ${row.bank_profile_id == p.id ? "selected" : ""}
+                      >
+                        🏦 ${p.bank_name} (${p.account_number})
+                      </option>
+                    `
+                    )
+                    .join("")
+                : `<option disabled>No Bank Profiles Found</option>`
+            }
+          </select>
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Update Entry",
+    focusConfirm: false,
+    didOpen: () => {
+      const dateInput = document.getElementById("swal-edit-date");
+      const dateTextLabel = document.getElementById("swal-edit-date-text");
 
-        dateInput.addEventListener("change", (e) => {
-          dateTextLabel.textContent = formatDate(e.target.value);
-        });
+      dateInput.addEventListener("change", (e) => {
+        dateTextLabel.textContent = formatDate(e.target.value);
+      });
+    },
+    preConfirm: () => {
+      const amount = document.getElementById("swal-edit-amount").value;
+      const selectedType = document.getElementById("swal-edit-type").value;
+      const payment_date = document.getElementById("swal-edit-date").value;
+      const selectedVal = document.getElementById("swal-edit-method").value;
 
-        let visible = false;
-        eye.addEventListener("click", () => {
-          visible = !visible;
-          input.type = visible ? "text" : "password";
-          eye.textContent = visible ? "🙈" : "👁";
-        });
-      },
-      preConfirm: () => {
-        const amount = document.getElementById("swal-edit-amount").value;
-        const selectedType = document.getElementById("swal-edit-type").value;
-        const payment_date = document.getElementById("swal-edit-date").value;
-        const selectedVal = document.getElementById("swal-edit-method").value;
-        const password = document.getElementById("swal-edit-pass").value.trim();
-
-        if (!amount || Number(amount) <= 0) {
-          Swal.showValidationMessage("Valid amount required");
-          return false;
-        }
-        if (!payment_date) {
-          Swal.showValidationMessage("Valid date required");
-          return false;
-        }
-        if (!password) {
-          Swal.showValidationMessage("Password cannot be empty");
-          return false;
-        }
-
-        let payment_method = "Cash";
-        let bank_profile_id = null;
-
-        if (selectedVal.startsWith("Bank_")) {
-          payment_method = "Bank";
-          bank_profile_id = selectedVal.split("_")[1];
-        }
-
-        return {
-          amount: Number(amount),
-          payment_date,
-          payment_method,
-          bank_profile_id,
-          password,
-          type: selectedType
-        };
+      if (!amount || Number(amount) <= 0) {
+        Swal.showValidationMessage("Valid amount required");
+        return false;
       }
-    });
+      if (!payment_date) {
+        Swal.showValidationMessage("Valid date required");
+        return false;
+      }
 
-    if (!formValues) return;
+      let payment_method = "Cash";
+      let bank_profile_id = null;
 
-    Swal.fire({
-      width: "250px",
-      title: "Updating...",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
-    });
+      if (selectedVal.startsWith("Bank_")) {
+        payment_method = "Bank";
+        bank_profile_id = selectedVal.split("_")[1];
+      }
 
-    try {
-      const r = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/registered-ledger/edit/${row.id}`, {
+      return {
+        amount: Number(amount),
+        payment_date,
+        payment_method,
+        bank_profile_id,
+        type: selectedType,
+      };
+    },
+  });
+
+  if (!formValues) return;
+
+  // Submit to Backend
+  Swal.fire({
+    width: "250px",
+    title: "Updating...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  try {
+    const r = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/registered-ledger/edit/${row.id}`,
+      {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formValues)
-      });
-
-      const d = await r.json();
-      Swal.close();
-
-      if (d.success) {
-        await loadLedger(customerCode);
-        await loadPending();
-        Swal.fire({ width: "280px", icon: "success", text: "Transaction Updated Successfully" });
-      } else {
-        Swal.fire({ width: "300px", icon: "error", text: d.error || "Update Failed!" });
+        body: JSON.stringify(formValues),
       }
-    } catch (err) {
-      Swal.close();
-      Swal.fire({ width: "300px", icon: "error", text: "Network communication error" });
-    }
-  };
+    );
 
-  /* =========================
-     EXPORTS
+    const d = await r.json();
+    Swal.close();
+
+    if (d.success) {
+      await loadLedger(customerCode);
+      await loadPending();
+      Swal.fire({
+        width: "280px",
+        icon: "success",
+        text: "Transaction Updated Successfully",
+      });
+    } else {
+      Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: d.error || "Update Failed!",
+      });
+    }
+  } catch (err) {
+    Swal.close();
+    Swal.fire({
+      width: "300px",
+      icon: "error",
+      text: "Network communication error",
+    });
+  }
+};
+
+/* =========================
+     EXPORTS (USING CUSTOM HOOK)
   ========================== */
   const exportPDF = () => {
-    if (rows.length === 0) return;
-
-    Swal.fire({
-      width: "250px",
-      title: "Generating PDF...",
-      text: "Please wait a moment",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
+    handleExportPDF({
+      code: customerCode,
+      name: customerName,
+      fromDate: startDate,
+      toDate: endDate,
+      ledgerData: rows,
+      title: "REGISTERED CUSTOMER LEDGER STATEMENT",
     });
-
-    setTimeout(() => {
-      try {
-        const pdf = new jsPDF("p", "mm", "a4");
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-
-        let y = 15;
-
-        const drawHeader = (pageNum) => {
-          pdf.setFillColor(18, 97, 160);
-          pdf.rect(0, 0, pageWidth, 26, "F");
-
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(16);
-          pdf.text("BE TRAVEL & TOURS", pageWidth / 2, 12, { align: "center" });
-
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(9);
-          pdf.text(`REGISTERED CUSTOMER LEDGER STATEMENT — Page ${pageNum}`, pageWidth / 2, 19, { align: "center" });
-
-          pdf.setFillColor(242, 245, 248);
-          pdf.rect(10, 29, pageWidth - 20, 22, "F");
-
-          pdf.setTextColor(33, 37, 41);
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(10);
-          pdf.text(`CUSTOMER NAME: ${customerName.toUpperCase()}`, 13, 36);
-          pdf.text(`CUSTOMER CODE: ${customerCode}`, 13, 44);
-
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(9.5);
-          const periodStr = startDate || endDate ? `${startDate || "Start"} to ${endDate || "Present"}` : "All Records";
-          pdf.text(`Statement Period: ${periodStr}`, pageWidth - 95, 36);
-          pdf.text(`Printed On: ${getRowDate({ date: new Date() })}`, pageWidth - 95, 44);
-
-          pdf.setFillColor(33, 37, 41);
-          pdf.rect(10, 55, pageWidth - 20, 8, "F");
-          pdf.setTextColor(255, 255, 255);
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(9);
-          pdf.text("Date", 13, 60.5);
-          pdf.text("Description", 35, 60.5);
-          pdf.text("Debit (-)", pageWidth - 80, 60.5, { align: "right" });
-          pdf.text("Credit (+)", pageWidth - 50, 60.5, { align: "right" });
-          pdf.text("Balance", pageWidth - 14, 60.5, { align: "right" });
-        };
-
-        let currentPage = 1;
-        drawHeader(currentPage);
-        y = 68;
-
-        rows.forEach((row) => {
-          if (y > pageHeight - 18) {
-            pdf.addPage();
-            currentPage++;
-            drawHeader(currentPage);
-            y = 68;
-          }
-
-          pdf.setTextColor(50, 50, 50);
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(8.5);
-
-          pdf.text(getRowDate(row), 13, y);
-          pdf.text(row.description, 35, y, { maxWidth: 80 });
-
-          const debVal = row.debit > 0 ? fmtAmt(row.debit) : "-";
-          const credVal = row.credit > 0 ? fmtAmt(row.credit) : "-";
-
-          pdf.text(debVal, pageWidth - 80, y, { align: "right" });
-          pdf.text(credVal, pageWidth - 50, y, { align: "right" });
-
-          pdf.setFont("helvetica", "bold");
-          pdf.text(fmtAmt(row.balance), pageWidth - 14, y, { align: "right" });
-
-          pdf.setDrawColor(230, 230, 230);
-          pdf.setLineWidth(0.1);
-          pdf.line(10, y + 2.5, pageWidth - 10, y + 2.5);
-
-          y += 8;
-        });
-
-        const safeName = customerName.replace(/[^a-zA-Z0-9]/g, "_");
-        pdf.save(`Ledger-${customerCode}-${safeName}.pdf`);
-
-        Swal.close();
-      } catch (error) {
-        console.error(error);
-        Swal.fire({ width: "300px", icon: "error", text: "Failed to generate PDF" });
-      }
-    }, 100);
   };
 
   const exportExcel = () => {
-    if (rows.length === 0) return;
-
-    Swal.fire({
-      width: "250px",
-      title: "Generating Excel...",
-      text: "Please wait a moment",
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
+    handleExportExcel({
+      code: customerCode,
+      name: customerName,
+      fromDate: startDate,
+      toDate: endDate,
+      ledgerData: rows,
+      title: "REGISTERED CUSTOMER FINANCIAL LEDGER",
     });
-
-    setTimeout(() => {
-      try {
-        const headerInfo = [
-          ["BE TRAVEL & TOURS"],
-          ["REGISTERED CUSTOMER FINANCIAL LEDGER"],
-          [""],
-          ["Customer Name:", customerName.toUpperCase(), "", "Printed Date:", getRowDate({ date: new Date() })],
-          ["Customer Code:", customerCode, "", "Statement Period:", startDate || endDate ? `${startDate || "Start"} to ${endDate || "Present"}` : "All Records"],
-          [""]
-        ];
-
-        const tableHeaders = ["Date", "Description", "Debit (-)", "Credit (+)", "Balance"];
-
-        const tableData = rows.map((r) => [
-          getRowDate(r),
-          r.description,
-          r.debit > 0 ? r.debit : 0,
-          r.credit > 0 ? r.credit : 0,
-          r.balance
-        ]);
-
-        const sheetData = [...headerInfo, tableHeaders, ...tableData];
-
-        const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Ledger Statement");
-
-        worksheet["!cols"] = [
-          { wch: 15 },
-          { wch: 45 },
-          { wch: 15 },
-          { wch: 15 },
-          { wch: 18 }
-        ];
-
-        const safeName = customerName.replace(/[^a-zA-Z0-9]/g, "_");
-        XLSX.writeFile(workbook, `Ledger-${customerCode}-${safeName}.xlsx`);
-
-        Swal.close();
-      } catch (error) {
-        console.error(error);
-        Swal.fire({ width: "300px", icon: "error", text: "Failed to generate Excel sheet" });
-      }
-    }, 100);
-  };
-
-  const getTripDurationText = (flightDatesArray) => {
-    const dates = (flightDatesArray || []).filter(Boolean).sort();
-    if (dates.length >= 2) {
-      const start = new Date(dates[0]);
-      const end = new Date(dates[dates.length - 1]);
-      const diff = (end - start) / (1000 * 60 * 60 * 24);
-      return `${diff + 1} Days / ${diff} Nights`;
-    }
-    return "Standard Duration";
-  };
-
-  const getModalTotalSar = () => {
-    if (!detailData) return 0;
-    return (
-      detailData.total_sar ||
-      detailData.sar_total ||
-      detailData.hotels_total ||
-      detailData.flight_sar_total ||
-      detailData.total_sar_rate ||
-      0
-    );
-  };
-
-  const getModalPkrRate = () => {
-    if (!detailData) return 0;
-    return (
-      detailData.pkr_rate ||
-      detailData.sar_rate ||
-      detailData.exchange_rate ||
-      detailData.rate ||
-      0
-    );
-  };
-
-  const getModalTotalPkr = () => {
-    if (!detailData) return 0;
-    return (
-      detailData.total_pkr ||
-      detailData.net_pkr_total ||
-      detailData.grand_total ||
-      detailData.total_amount ||
-      detailData.total_amount_pkr ||
-      detailData.credit ||
-      0
-    );
   };
 
   return (

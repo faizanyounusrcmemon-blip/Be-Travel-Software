@@ -65,6 +65,8 @@ export default function ExpenseLedger({ onNavigate }) {
 
   /* ================= PASSWORD POPUP ================= */
   const askPassword = async (title = "Enter Password") => {
+    let handleEnter;
+
     const { value } = await Swal.fire({
       width: "300px",
       html: `
@@ -96,7 +98,7 @@ export default function ExpenseLedger({ onNavigate }) {
 
       preConfirm: () => {
         const input = document.getElementById("swal-pass");
-        const val = input.value.trim();
+        const val = input ? input.value.trim() : "";
         if (!val) {
           Swal.showValidationMessage("Password required");
           return false;
@@ -109,15 +111,16 @@ export default function ExpenseLedger({ onNavigate }) {
         const toggle = document.getElementById("toggle-pass");
         let show = false;
 
-        toggle.onclick = () => {
-          show = !show;
-          input.type = show ? "text" : "password";
-          toggle.textContent = show ? "🙈" : "👁";
-        };
+        if (toggle && input) {
+          toggle.onclick = () => {
+            show = !show;
+            input.type = show ? "text" : "password";
+            toggle.textContent = show ? "🙈" : "👁";
+          };
+          setTimeout(() => input.focus(), 100);
+        }
 
-        setTimeout(() => input.focus(), 100);
-
-        const handleEnter = (e) => {
+        handleEnter = (e) => {
           if (e.key === "Enter") {
             e.preventDefault();
             const confirmBtn = document.querySelector(".swal2-confirm");
@@ -126,10 +129,12 @@ export default function ExpenseLedger({ onNavigate }) {
         };
 
         document.addEventListener("keydown", handleEnter);
+      },
 
-        Swal.getPopup().addEventListener("remove", () => {
+      willClose: () => {
+        if (handleEnter) {
           document.removeEventListener("keydown", handleEnter);
-        });
+        }
       },
     });
 
@@ -138,11 +143,13 @@ export default function ExpenseLedger({ onNavigate }) {
 
   /* ================= SAVE ================= */
   const save = async () => {
-    if (!date || !title || !amount) {
+    const rawAmount = amount.replace(/,/g, "");
+
+    if (!date || !title.trim() || !rawAmount || Number(rawAmount) <= 0) {
       return Swal.fire({
         width: "300px",
         icon: "warning",
-        text: "Missing required fields",
+        text: "Please enter valid date, title, and amount",
       });
     }
 
@@ -169,17 +176,16 @@ export default function ExpenseLedger({ onNavigate }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             expense_date: date,
-            title,
-            amount: amount.replace(/,/g, ""),
+            title: title.trim(),
+            amount: rawAmount,
             payment_method: method,
             bank_profile_id: method === "Bank" ? selectedBankProfile : null,
-            remarks,
+            remarks: remarks.trim(),
           }),
         }
       );
 
       const d = await r.json();
-
       Swal.close();
 
       if (d.success) {
@@ -212,11 +218,50 @@ export default function ExpenseLedger({ onNavigate }) {
     }
   };
 
-  /* ================= EDIT EXPENSE ================= */
+  /* ================= EDIT EXPENSE (2-STEP VERIFICATION FLOW) ================= */
   const editExpense = async (row) => {
+    if (!row || !row.id) return;
+
+    // STEP 1: PASSWORD VERIFICATION POPUP
+    const passInput = await askPassword("🔐 Enter Edit Password");
+    if (!passInput) return;
+
+    Swal.fire({
+      width: "250px",
+      title: "Verifying...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+      const verifyRes = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/expense-ledger/verify-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: passInput }),
+        }
+      );
+      const verifyData = await verifyRes.json();
+
+      if (!verifyData.success) {
+        return Swal.fire({
+          width: "300px",
+          icon: "error",
+          text: verifyData.error || "Incorrect Authorization Password!",
+        });
+      }
+    } catch (err) {
+      return Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: "Network error during password verification",
+      });
+    }
+
+    // STEP 2: EDIT FORM POPUP
     const rawDate = row.expense_date ? row.expense_date.slice(0, 10) : today;
 
-    // Bank profiles dynamic options for select html
     const bankOptions = bankProfiles
       .map(
         (p) =>
@@ -230,45 +275,47 @@ export default function ExpenseLedger({ onNavigate }) {
       title: "✏️ Edit Expense",
       width: "420px",
       html: `
-        <div style="text-align:left; font-size:13px;" className="fw-bold">
-          <label style="margin-top:8px">Date:</label>
+        <div style="text-align:left; font-size:13px;">
+          <label style="margin-top:8px" class="fw-bold">Date:</label>
           <input id="edit-date" type="date" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${rawDate}">
           
-          <label>Title:</label>
+          <label class="fw-bold">Title:</label>
           <input id="edit-title" type="text" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${row.title || ""}">
           
-          <label>Amount:</label>
+          <label class="fw-bold">Amount:</label>
           <input id="edit-amount" type="number" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${row.amount || ""}">
           
-          <label>Payment Method:</label>
+          <label class="fw-bold">Payment Method:</label>
           <select id="edit-method" class="swal2-select" style="height:35px;margin:5px 0 10px 0;width:100%">
             <option value="Cash" ${row.payment_method === "Cash" ? "selected" : ""}>Cash</option>
             <option value="Bank" ${row.payment_method === "Bank" ? "selected" : ""}>Bank</option>
           </select>
 
           <div id="edit-bank-box" style="display:${row.payment_method === "Bank" ? "block" : "none"}">
-            <label>Select Bank:</label>
+            <label class="fw-bold">Select Bank:</label>
             <select id="edit-bank-id" class="swal2-select" style="height:35px;margin:5px 0 10px 0;width:100%">
               <option value="">-- Choose Bank --</option>
               ${bankOptions}
             </select>
           </div>
 
-          <label>Remarks:</label>
+          <label class="fw-bold">Remarks:</label>
           <input id="edit-remarks" type="text" class="swal2-input" style="height:35px;margin:5px 0 10px 0;width:100%" value="${row.remarks || ""}">
         </div>
       `,
       showCancelButton: true,
-      confirmButtonText: "Next ➡",
+      confirmButtonText: "Update Expense",
       focusConfirm: false,
 
       didOpen: () => {
         const methodEl = document.getElementById("edit-method");
         const bankBox = document.getElementById("edit-bank-box");
 
-        methodEl.addEventListener("change", (e) => {
-          bankBox.style.display = e.target.value === "Bank" ? "block" : "none";
-        });
+        if (methodEl && bankBox) {
+          methodEl.addEventListener("change", (e) => {
+            bankBox.style.display = e.target.value === "Bank" ? "block" : "none";
+          });
+        }
       },
 
       preConfirm: () => {
@@ -279,8 +326,8 @@ export default function ExpenseLedger({ onNavigate }) {
         const bank_profile_id = document.getElementById("edit-bank-id").value;
         const remarks = document.getElementById("edit-remarks").value.trim();
 
-        if (!expense_date || !title || !amount) {
-          Swal.showValidationMessage("Please fill required fields");
+        if (!expense_date || !title || !amount || Number(amount) <= 0) {
+          Swal.showValidationMessage("Please fill required fields with valid amount");
           return false;
         }
 
@@ -292,7 +339,7 @@ export default function ExpenseLedger({ onNavigate }) {
         return {
           expense_date,
           title,
-          amount,
+          amount: Number(amount),
           payment_method,
           bank_profile_id: payment_method === "Bank" ? bank_profile_id : null,
           remarks,
@@ -301,10 +348,6 @@ export default function ExpenseLedger({ onNavigate }) {
     });
 
     if (!formValues) return;
-
-    // Ask Password for Edit
-    const pass = await askPassword("Enter Password to Save Changes");
-    if (!pass) return;
 
     Swal.fire({
       width: "260px",
@@ -319,10 +362,7 @@ export default function ExpenseLedger({ onNavigate }) {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...formValues,
-            password: pass,
-          }),
+          body: JSON.stringify(formValues),
         }
       );
 
@@ -366,8 +406,7 @@ export default function ExpenseLedger({ onNavigate }) {
 
     if (!confirmDelete.isConfirmed) return;
 
-    const pass = await askPassword("Enter Delete Password");
-
+    const pass = await askPassword("🔐 Enter Delete Password");
     if (!pass) return;
 
     Swal.fire({
@@ -611,20 +650,22 @@ export default function ExpenseLedger({ onNavigate }) {
                 </td>
                 <td>{r.remarks || "-"}</td>
                 <td className="text-center">
-                  <button
-                    className="btn btn-warning btn-sm py-0 px-2 me-1"
-                    title="Edit"
-                    onClick={() => editExpense(r)}
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    className="btn btn-danger btn-sm py-0 px-2"
-                    title="Delete"
-                    onClick={() => del(r.id)}
-                  >
-                    ❌
-                  </button>
+                  <div className="d-flex gap-1 justify-content-center">
+                    <button
+                      className="btn btn-outline-primary btn-sm py-0 px-1"
+                      style={{ fontSize: "11px" }}
+                      onClick={() => editExpense(r)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="btn btn-outline-danger btn-sm py-0 px-1"
+                      style={{ fontSize: "11px" }}
+                      onClick={() => del(r.id)}
+                    >
+                      Del
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
