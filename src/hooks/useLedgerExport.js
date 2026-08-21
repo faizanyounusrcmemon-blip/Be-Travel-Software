@@ -28,7 +28,7 @@ export default function useLedgerExport() {
     fromDate = "",
     toDate = "",
     ledgerData = [],
-    companyName = "BE TRAVEL & TOURS", // Fully dynamic (No hardcoded default)
+    companyName = "BE TRAVEL & TOURS",
     title = "LEDGER STATEMENT",
     filePrefix = "Ledger_Statement",
   } = {}) => {
@@ -51,22 +51,18 @@ export default function useLedgerExport() {
         const printDate = formatDate(new Date());
 
         const renderHeader = () => {
-          // Top Banner (Blue)
           doc.setFillColor(13, 71, 161);
           doc.rect(0, 0, 210, 28, "F");
 
-          // Dynamic Company Name
           doc.setTextColor(255, 255, 255);
           doc.setFont("helvetica", "bold");
           doc.setFontSize(15);
           doc.text(activeCompany, 105, 12, { align: "center" });
 
-          // Statement Title inside Header Banner
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9);
           doc.text(title.toUpperCase(), 105, 20, { align: "center" });
 
-          // Info Box
           doc.setFillColor(245, 247, 250);
           doc.rect(10, 32, 190, 22, "F");
 
@@ -93,9 +89,10 @@ export default function useLedgerExport() {
           doc.setFontSize(8);
 
           doc.text("Date", 14, startY + 5.5);
-          doc.text("Description", 45, startY + 5.5);
-          doc.text("Debit (-)", 135, startY + 5.5, { align: "right" });
-          doc.text("Credit (+)", 165, startY + 5.5, { align: "right" });
+          doc.text("Description", 42, startY + 5.5);
+          doc.text("Method", 108, startY + 5.5);
+          doc.text("Debit (-)", 140, startY + 5.5, { align: "right" });
+          doc.text("Credit (+)", 170, startY + 5.5, { align: "right" });
           doc.text("Balance", 195, startY + 5.5, { align: "right" });
         };
 
@@ -110,11 +107,21 @@ export default function useLedgerExport() {
         ledgerData.forEach((row) => {
           const itemDetail = row.detail || row.description || row.type || "-";
 
-          // Text wrapping logic (Max width = 80mm)
-          const descLines = doc.splitTextToSize(String(itemDetail), 80);
-          const rowHeight = Math.max(8, descLines.length * 4.5 + 3);
+          // Text Wrapping for Description (Width 60mm)
+          const descLines = doc.splitTextToSize(String(itemDetail), 60);
 
-          // Page Break Check
+          // Payment Method Text & Wrapping (Width 25mm)
+          let methodText = "-";
+          if (row.payment_method) {
+            const pm = String(row.payment_method).toUpperCase();
+            methodText = pm === "BANK" && row.bank_name ? `BANK (${row.bank_name})` : pm;
+          }
+          const methodLines = doc.splitTextToSize(methodText, 25);
+
+          // Dynamic row height based on max lines
+          const maxLines = Math.max(descLines.length, methodLines.length);
+          const rowHeight = Math.max(8, maxLines * 4 + 3);
+
           if (y + rowHeight > 275) {
             doc.addPage();
             renderHeader();
@@ -125,29 +132,35 @@ export default function useLedgerExport() {
             doc.setTextColor(30, 30, 30);
           }
 
-          // Date & Wrapped Description
+          // Render Date
           doc.text(formatDate(row.date || row.payment_date || row.created_at), 14, y + 5);
-          doc.text(descLines, 45, y + 5);
+          
+          // Render Description
+          doc.text(descLines, 42, y + 5);
 
-          // Debit, Credit, Balance
+          // Render Method (Singly and Cleanly)
+          doc.setFontSize(7.5);
+          doc.text(methodLines, 108, y + 5);
+          doc.setFontSize(8);
+
+          // Render Debit, Credit, Balance
           const debVal = Number(row.debit || 0) > 0 ? fmtAmt(row.debit) : "-";
           const credVal = Number(row.credit || 0) > 0 ? fmtAmt(row.credit) : "-";
 
-          doc.text(debVal, 135, y + 5, { align: "right" });
-          doc.text(credVal, 165, y + 5, { align: "right" });
+          doc.text(debVal, 140, y + 5, { align: "right" });
+          doc.text(credVal, 170, y + 5, { align: "right" });
 
           doc.setFont("helvetica", "bold");
           doc.text(fmtAmt(row.balance), 195, y + 5, { align: "right" });
           doc.setFont("helvetica", "normal");
 
-          // Separator Line
+          // Line separator
           doc.setDrawColor(230, 230, 230);
           doc.line(10, y + rowHeight - 1, 200, y + rowHeight - 1);
 
           y += rowHeight;
         });
 
-        // Footer with Page Numbers & Dynamic Company Name
         const totalPages = doc.internal.getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
           doc.setPage(i);
@@ -179,7 +192,7 @@ export default function useLedgerExport() {
     fromDate = "",
     toDate = "",
     ledgerData = [],
-    companyName = "BE TRAVEL & TOURS", // Fully dynamic
+    companyName = "BE TRAVEL & TOURS",
     title = "LEDGER STATEMENT",
     filePrefix = "Ledger_Statement",
   } = {}) => {
@@ -195,7 +208,6 @@ export default function useLedgerExport() {
 
       const excelRows = [];
 
-      // Add Company Name row only if provided
       if (companyName) {
         excelRows.push([companyName.toUpperCase()]);
       }
