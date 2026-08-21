@@ -972,16 +972,17 @@ const editRow = async (row) => {
             </div>
             <div className="table-responsive">
               <table className="table table-striped table-hover table-bordered mb-0 align-middle">
-                <thead className="table-dark">
-                  <tr>
-                    <th style={{ width: "12%" }}>Date</th>
-                    <th style={{ width: "48%" }}>Details / Description</th>
-                    <th style={{ width: "12%" }} className="text-end">Debit (-)</th>
-                    <th style={{ width: "12%" }} className="text-end">Credit (+)</th>
-                    <th style={{ width: "12%" }} className="text-end">Balance</th>
-                    <th style={{ width: "4%" }} className="text-center">Action</th>
-                  </tr>
-                </thead>
+<thead className="table-dark">
+  <tr>
+    <th style={{ width: "12%" }}>Date</th>
+    <th style={{ width: "38%" }}>Details / Description</th>
+    <th style={{ width: "12%" }}>Payment Method</th> {/* 👈 Ye new header add karein */}
+    <th style={{ width: "12%" }} className="text-end">Debit (-)</th>
+    <th style={{ width: "12%" }} className="text-end">Credit (+)</th>
+    <th style={{ width: "12%" }} className="text-end">Balance</th>
+    <th style={{ width: "4%" }} className="text-center">Action</th>
+  </tr>
+</thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
@@ -997,6 +998,16 @@ const editRow = async (row) => {
                         <tr key={r.id || i}>
                           <td>{getRowDate(r)}</td>
                           <td>{r.description}</td>
+<td className="text-center small">
+        {r.payment_method && r.payment_method !== "-" ? (
+          <span className={`badge ${r.payment_method.toLowerCase() === "cash" ? "bg-success" : "bg-primary"}`}>
+            {r.bank_name ? `Bank: ${r.bank_name}` : r.payment_method}
+          </span>
+        ) : (
+          "-"
+        )}
+      </td>
+
                           <td className="text-end text-danger fw-bold font-monospace">{r.debit > 0 ? fmtAmt(r.debit) : "-"}</td>
                           <td className="text-end text-success fw-bold font-monospace">{r.credit > 0 ? fmtAmt(r.credit) : "-"}</td>
                           <td className="text-end fw-bold font-monospace" style={{ backgroundColor: "#fdfdfd" }}>

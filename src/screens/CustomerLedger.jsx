@@ -743,15 +743,16 @@ export default function CustomerLedger({ onNavigate }) {
           <div ref={pdfRef} className="card shadow-sm overflow-hidden">
             <div className="table-responsive">
               <table className="table table-striped table-hover table-bordered mb-0 align-middle">
-                <thead className="table-dark">
-                  <tr>
-                    <th style={{ width: "15%" }}>Date</th>
-                    <th style={{ width: "45%" }}>Description</th>
-                    <th style={{ width: "12%" }} className="text-end">Debit (-)</th>
-                    <th style={{ width: "12%" }} className="text-end">Credit (+)</th>
-                    <th style={{ width: "12%" }} className="text-end">Balance</th>
-                    <th style={{ width: "6%" }} className="text-center">Action</th>
-                  </tr>
+<thead className="table-dark">
+  <tr>
+    <th style={{ width: "12%" }}>Date</th>
+    <th style={{ width: "35%" }}>Description</th>
+    <th style={{ width: "15%" }}>Method</th> {/* 👈 Naya Column Header */}
+    <th style={{ width: "11%" }} className="text-end">Debit (-)</th>
+    <th style={{ width: "11%" }} className="text-end">Credit (+)</th>
+    <th style={{ width: "11%" }} className="text-end">Balance</th>
+    <th style={{ width: "5%" }} className="text-center">Action</th>
+  </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
@@ -764,9 +765,26 @@ export default function CustomerLedger({ onNavigate }) {
                     rows.map((r, i) => (
                       <tr key={r.id || i}>
                         <td>{getRowDate(r)}</td>
-                        <td className={r.id === "CUSTOMER" ? "fw-bold text-primary" : ""}>
-                          {r.description}
-                        </td>
+{/* Description Cell */}
+<td className={r.id === "CUSTOMER" ? "fw-bold text-primary" : ""}>
+  {r.description}
+</td>
+
+{/* 👈 NAYA PAYMENT METHOD CELL */}
+<td>
+  {r.payment_method?.toLowerCase() === "bank" ? (
+    <span className="badge bg-primary">
+      🏦 {r.bank_name || "Bank"}
+    </span>
+  ) : r.payment_method?.toLowerCase() === "cash" ? (
+    <span className="badge bg-success">💵 Cash</span>
+  ) : (
+    <span className="text-muted">-</span>
+  )}
+</td>
+
+{/* Debit Cell */}
+
                         <td className="text-end text-danger fw-bold">{r.debit > 0 ? fmtAmt(r.debit) : "-"}</td>
                         <td className="text-end text-success fw-bold">{r.credit > 0 ? fmtAmt(r.credit) : "-"}</td>
                         <td className="text-end fw-bold" style={{ backgroundColor: "#f8f9fa" }}>
