@@ -27,29 +27,14 @@ export default function BalanceSheet({ onNavigate }) {
     }
   };
 
-  if (loading) return <div className="p-5 text-center text-danger fw-bold">⏳ Loading Balance Sheet...</div>;
+  if (loading) return <div className="p-5 text-center text-primary fw-bold fs-5">⏳ Loading Real Balance Sheet...</div>;
   if (!data) return null;
 
   // Filters & Cleaning
+  const bankRows = data.banks || [];
   const standardRows = (data.customers || []).map(r => ({ ...r, balance: cleanBalance(r.balance) })).filter(r => r.balance !== 0);
   const registeredRows = (data.registeredCustomers || []).map(r => ({ ...r, balance: cleanBalance(r.balance) })).filter(r => r.balance !== 0);
   const supplierRows = (data.suppliers || []).map(r => ({ ...r, balance: cleanBalance(r.balance) })).filter(r => r.balance !== 0);
-  const bankRows = data.banks || [];
-
-  // Totals Calculations
-  const stdTotalSale = standardRows.reduce((a, r) => a + Number(r.sale_total || 0), 0);
-  const stdTotalReceived = standardRows.reduce((a, r) => a + Number(r.received || 0), 0);
-  const stdTotalBalance = standardRows.reduce((a, r) => a + Number(r.balance || 0), 0);
-
-  const regTotalDebits = registeredRows.reduce((a, r) => a + Number(r.sale_total || 0), 0);
-  const regTotalCredits = registeredRows.reduce((a, r) => a + Number(r.received || 0), 0);
-  const regTotalBalance = registeredRows.reduce((a, r) => a + Number(r.balance || 0), 0);
-
-  const supTotalPurchase = supplierRows.reduce((a, r) => a + Number(r.purchase_total || 0), 0);
-  const supTotalPaid = supplierRows.reduce((a, r) => a + Number(r.paid || 0), 0);
-  const supTotalBalance = supplierRows.reduce((a, r) => a + Number(r.balance || 0), 0);
-
-  const bankTotalBalance = bankRows.reduce((a, b) => a + Number(b.balance || 0), 0);
 
   const getStatusBadge = (status) => {
     if (!status) return null;
@@ -57,167 +42,98 @@ export default function BalanceSheet({ onNavigate }) {
       case "PENDING": return <span className="badge bg-danger">PENDING</span>;
       case "PARTIAL": return <span className="badge bg-warning text-dark">PARTIAL</span>;
       case "PAID": return <span className="badge bg-success">PAID</span>;
+      case "EXTRA PAID": return <span className="badge bg-primary">EXTRA PAID</span>;
       default: return <span className="badge bg-secondary">{status}</span>;
     }
   };
 
-  const finalPos = Number(data.summary?.final_net_position || 0);
+  const cashInHand = Number(data.summary?.cash_in_hand || 0);
+  const bankBalance = Number(data.summary?.bank_balance || 0);
+  
+  const walkinReceivable = Number(data.summary?.walkin_receivable || 0);
+  const registeredReceivable = Number(data.summary?.registered_receivable || 0);
+  const totalReceivable = Number(data.summary?.total_receivable || (walkinReceivable + registeredReceivable));
+
+  const totalPayable = Number(data.summary?.total_payable || 0);
+  
+  const walkinExtraReceived = Number(data.summary?.walkin_extra_received || 0);
+  const registeredExtraReceived = Number(data.summary?.registered_extra_received || 0);
+  const totalExtraReceived = Number(data.summary?.total_extra_received || (walkinExtraReceived + registeredExtraReceived));
+  
+  const totalExtraPaid = Number(data.summary?.total_extra_paid || 0);
+
+  const totalAssets = Number(data.summary?.total_assets || (cashInHand + bankBalance + totalReceivable + totalExtraPaid));
+  const totalLiabilities = Number(data.summary?.total_liabilities || (totalPayable + totalExtraReceived));
+  const netPosition = totalAssets - totalLiabilities;
 
   return (
     <div className="container py-4">
       {/* HEADER */}
-      <div className="mb-4 p-4 rounded-3 shadow-sm text-white" style={{ background: "linear-gradient(90deg, #1e3a8a, #3b82f6)" }}>
+      <div className="mb-4 p-4 rounded-3 shadow-sm text-white" style={{ background: "linear-gradient(90deg, #0f172a, #1e3a8a)" }}>
         <div className="d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center gap-3">
-            <div className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 48, height: 48, background: "rgba(255,255,255,0.2)", fontSize: 22 }}>📊</div>
+            <div className="d-flex align-items-center justify-content-center rounded-circle bg-white bg-opacity-20" style={{ width: 50, height: 50, fontSize: 24 }}>🏛️</div>
             <div>
-              <h4 className="mb-1 fw-bold">Balance Sheet Statement</h4>
-              <small className="opacity-75">Customer Receivables, Supplier Payables, Cash in Hand & Bank Balances</small>
+              <h4 className="mb-1 fw-bold">Final Real Balance Sheet Audit Statement</h4>
+              <small className="opacity-75">Complete Cash in Hand, Bank, Customer Ledger, Supplier Payables & Adjustments</small>
             </div>
           </div>
-          <button className="btn btn-light btn-sm fw-semibold" onClick={() => onNavigate("dashboard")}>← Back</button>
-        </div>
-      </div>
-      
-      {/* SECTION 1: STANDARD CUSTOMERS */}
-      <div className="card shadow-sm mb-4 border-start border-success border-3">
-        <div className="card-header bg-white fw-bold text-success">📋 Standard Customer Receivable (Walk-In)</div>
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead className="table-light">
-              <tr>
-                <th>#</th>
-                <th>Booking Ref</th>
-                <th>Customer Name</th>
-                <th className="text-end">Total Sale</th>
-                <th className="text-end">Received</th>
-                <th className="text-end">Balance</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standardRows.length === 0 && <tr><td colSpan="7" className="text-center text-muted py-2">No walk-in balance.</td></tr>}
-              {standardRows.map((r, i) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td className="fw-bold text-secondary">{r.ref_no}</td>
-                  <td className="fw-semibold">{r.customer_name}</td>
-                  <td className="text-end">{fmt(r.sale_total)}</td>
-                  <td className="text-end">{fmt(r.received)}</td>
-                  <td className={`text-end fw-bold ${r.balance < 0 ? "text-primary" : "text-success"}`}>{fmt(r.balance)}</td>
-                  <td>{getStatusBadge(r.status)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {standardRows.length > 0 && (
-              <tfoot className="table-secondary fw-bold">
-                <tr>
-                  <td colSpan="3" className="text-end">Total Walk-In Customer:</td>
-                  <td className="text-end">{fmt(stdTotalSale)}</td>
-                  <td className="text-end">{fmt(stdTotalReceived)}</td>
-                  <td className={`text-end ${stdTotalBalance < 0 ? "text-primary" : "text-success"}`}>{fmt(stdTotalBalance)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+          <button className="btn btn-light btn-sm fw-semibold shadow-sm" onClick={() => onNavigate("dashboard")}>← Back to Dashboard</button>
         </div>
       </div>
 
-      {/* SECTION 2: REGISTERED CUSTOMERS */}
-      <div className="card shadow-sm mb-4 border-start border-info border-3">
-        <div className="card-header bg-white fw-bold text-info">🔑 Registered Ledger Customers Accounts</div>
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead className="table-light">
-              <tr>
-                <th>#</th>
-                <th>Customer Code</th>
-                <th>Account Name</th>
-                <th className="text-end">Total Debits</th>
-                <th className="text-end">Total Credits</th>
-                <th className="text-end">Current Balance</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {registeredRows.length === 0 && <tr><td colSpan="7" className="text-center text-muted py-2">No registered customer accounts balance.</td></tr>}
-              {registeredRows.map((r, i) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td className="fw-bold text-dark">{r.customer_code}</td>
-                  <td className="fw-semibold text-primary">{r.customer_name}</td>
-                  <td className="text-end">{fmt(r.sale_total)}</td>
-                  <td className="text-end">{fmt(r.received)}</td>
-                  <td className={`text-end fw-bold ${r.balance < 0 ? "text-primary" : "text-danger"}`}>{fmt(r.balance)}</td>
-                  <td>{getStatusBadge(r.status)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {registeredRows.length > 0 && (
-              <tfoot className="table-secondary fw-bold">
-                <tr>
-                  <td colSpan="3" className="text-end">Total Registered Customers:</td>
-                  <td className="text-end">{fmt(regTotalDebits)}</td>
-                  <td className="text-end">{fmt(regTotalCredits)}</td>
-                  <td className={`text-end ${regTotalBalance < 0 ? "text-primary" : "text-danger"}`}>{fmt(regTotalBalance)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+      {/* QUICK LIQUIDITY CARDS */}
+      <div className="row g-3 mb-4">
+        <div className="col-md">
+          <div className="card shadow-sm border-0 border-start border-4 border-success h-100">
+            <div className="card-body">
+              <small className="text-muted fw-bold text-uppercase">💵 Cash in Hand</small>
+              <h5 className={`fw-bold mt-1 mb-0 ${cashInHand < 0 ? "text-danger" : "text-success"}`}>PKR {fmt(cashInHand)}</h5>
+            </div>
+          </div>
+        </div>
+        <div className="col-md">
+          <div className="card shadow-sm border-0 border-start border-4 border-primary h-100">
+            <div className="card-body">
+              <small className="text-muted fw-bold text-uppercase">🏦 Bank Balance</small>
+              <h5 className={`fw-bold mt-1 mb-0 ${bankBalance < 0 ? "text-danger" : "text-primary"}`}>PKR {fmt(bankBalance)}</h5>
+            </div>
+          </div>
+        </div>
+        <div className="col-md">
+          <div className="card shadow-sm border-0 border-start border-4 border-info h-100">
+            <div className="card-body">
+              <small className="text-muted fw-bold text-uppercase">🚶 Walk-In Receivable</small>
+              <h5 className="fw-bold text-info mt-1 mb-0">PKR {fmt(walkinReceivable)}</h5>
+            </div>
+          </div>
+        </div>
+        <div className="col-md">
+          <div className="card shadow-sm border-0 border-start border-4 border-warning h-100">
+            <div className="card-body">
+              <small className="text-muted fw-bold text-uppercase">🔑 Registered Receivable</small>
+              <h5 className="fw-bold text-warning mt-1 mb-0">PKR {fmt(registeredReceivable)}</h5>
+            </div>
+          </div>
+        </div>
+        <div className="col-md">
+          <div className="card shadow-sm border-0 border-start border-4 border-danger h-100">
+            <div className="card-body">
+              <small className="text-muted fw-bold text-uppercase">📦 Supplier Payable</small>
+              <h5 className="fw-bold text-danger mt-1 mb-0">PKR {fmt(totalPayable)}</h5>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* SECTION 3: SUPPLIERS */}
-      <div className="card shadow-sm mb-4 border-start border-danger border-3">
-        <div className="card-header bg-white fw-bold text-danger">📦 Supplier Payable</div>
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead className="table-light">
-              <tr>
-                <th>#</th>
-                <th>Supplier Code</th>
-                <th>Supplier Name</th>
-                <th className="text-end">Total Purchase</th>
-                <th className="text-end">Paid</th>
-                <th className="text-end">Balance</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {supplierRows.map((r, i) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td className="fw-bold text-secondary">{r.supplier_code}</td>
-                  <td className="fw-semibold">{r.supplier_name}</td>
-                  <td className="text-end">{fmt(r.purchase_total)}</td>
-                  <td className="text-end">{fmt(r.paid)}</td>
-                  <td className={`text-end fw-bold ${r.balance < 0 ? "text-primary" : "text-danger"}`}>{fmt(r.balance)}</td>
-                  <td>{getStatusBadge(r.status)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {supplierRows.length > 0 && (
-              <tfoot className="table-secondary fw-bold">
-                <tr>
-                  <td colSpan="3" className="text-end">Total Supplier:</td>
-                  <td className="text-end">{fmt(supTotalPurchase)}</td>
-                  <td className="text-end">{fmt(supTotalPaid)}</td>
-                  <td className={`text-end ${supTotalBalance < 0 ? "text-primary" : "text-danger"}`}>{fmt(supTotalBalance)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-
-      {/* SECTION 4: BANK PROFILES */}
+{/* BANK ACCOUNTS LIST SECTION */}
       <div className="card shadow-sm mb-4 border-start border-primary border-3">
-        <div className="card-header bg-white fw-bold text-primary">🏦 Bank Accounts Balances</div>
+        <div className="card-header bg-white fw-bold text-primary d-flex justify-content-between align-items-center">
+          <span>🏦 Active Bank Accounts Breakdown</span>
+          <span className="badge bg-primary-subtle text-primary border border-primary">Bank Profiles</span>
+        </div>
         <div className="table-responsive">
-          <table className="table table-hover mb-0">
+          <table className="table table-hover align-middle mb-0">
             <thead className="table-light">
               <tr>
                 <th>#</th>
@@ -228,81 +144,210 @@ export default function BalanceSheet({ onNavigate }) {
               </tr>
             </thead>
             <tbody>
-              {bankRows.length === 0 && <tr><td colSpan="5" className="text-center text-muted py-2">No active bank accounts found.</td></tr>}
+              {bankRows.length === 0 && <tr><td colSpan="5" className="text-center text-muted py-3">No active bank accounts found.</td></tr>}
               {bankRows.map((b, i) => (
                 <tr key={i}>
                   <td>{i + 1}</td>
                   <td className="fw-bold text-dark">{b.bank_name}</td>
-                  <td>{b.account_title}</td>
+                  <td className="fw-semibold text-secondary">{b.account_title}</td>
                   <td className="text-muted">{b.account_number}</td>
-                  <td className={`text-end fw-bold ${b.balance >= 0 ? "text-success" : "text-danger"}`}>{fmt(b.balance)}</td>
+                  <td className={`text-end fw-bold ${b.balance < 0 ? "text-danger" : "text-primary"}`}> {fmt(b.balance)}</td>
                 </tr>
               ))}
             </tbody>
-            {bankRows.length > 0 && (
-              <tfoot className="table-secondary fw-bold">
-                <tr>
-                  <td colSpan="4" className="text-end">Total Available Bank Balance:</td>
-                  <td className={`text-end ${bankTotalBalance >= 0 ? "text-success" : "text-danger"}`}>{fmt(bankTotalBalance)}</td>
-                </tr>
-              </tfoot>
-            )}
+            <tfoot className="table-light fw-bold">
+              <tr>
+                <td colSpan="4" className="text-end">Combined Total Bank Balance:</td>
+                <td className={`text-end fs-6 ${bankBalance < 0 ? "text-danger" : "text-primary"}`}> {fmt(bankBalance)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
 
-      {/* SUMMARY & FINAL POSITION BLOCK */}
-      <div className="card shadow-sm">
-        <div className="card-header bg-white fw-bold text-dark">📌 Complete System Summary</div>
-        <table className="table mb-0">
-          <tbody>
-            <tr>
-              <td>💰 Total Customer Receivables (+ Assets)</td>
-              <td className="text-end fw-bold text-success">+{fmt(data.summary?.total_receivable)}</td>
-            </tr>
-            <tr>
-              <td>💵 Cash in Hand (+ Assets)</td>
-              <td className="text-end fw-bold text-success">+{fmt(data.summary?.cash_in_hand)}</td>
-            </tr>
-            <tr>
-              <td>🏦 Total Bank Accounts Balance (+ Assets)</td>
-              <td className="text-end fw-bold text-success">+{fmt(data.summary?.total_bank_balance)}</td>
-            </tr>
-            <tr>
-              <td>💸 Total Extra Paid Adjustments (+ Assets)</td>
-              <td className="text-end fw-bold text-success">+{fmt(data.summary?.total_extra_paid)}</td>
-            </tr>
-            <tr className="table-light">
-              <td>📦 Total Supplier Payables (- Liabilities)</td>
-              <td className="text-end fw-bold text-danger">-{fmt(data.summary?.total_payable)}</td>
-            </tr>
-            <tr className="table-light">
-              <td>💎 Total Extra Received Adjustments (- Liabilities)</td>
-              <td className="text-end fw-bold text-danger">-{fmt(data.summary?.total_extra_received)}</td>
-            </tr>
-            <tr className="fw-bold" style={{ fontSize: "1.1rem" }}>
-              <td 
-                className="py-3 text-white" 
-                style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
-              >
-                🏁 Final Net Financial Position <br />
-                <small className="fw-normal opacity-75">
-                  {finalPos >= 0 
-                    ? "(Lene zyada hain / Saare Payables dene ke baad bachat)" 
-                    : "(Dene zyada hain / Shortage)"}
-                </small>
-              </td>
-              <td 
-                className="text-end align-middle py-3 text-white" 
-                style={{ backgroundColor: finalPos >= 0 ? "#0d6efd" : "#dc3545" }}
-              >
-                {finalPos >= 0 
-                  ? `PKR ${fmt(finalPos)} (LENE HAIN - NET SURPLUS)` 
-                  : `PKR ${fmt(Math.abs(finalPos))} (DENE HAIN - NET DEFICIT)`}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      {/* SECTION 1: STANDARD CUSTOMERS */}
+      <div className="card shadow-sm mb-4 border-start border-success border-3">
+        <div className="card-header bg-white fw-bold text-success d-flex justify-content-between align-items-center">
+          <span>📋 Standard Customer Receivable (Walk-In)</span>
+          <span className="badge bg-success-subtle text-success border border-success">Walk-In Ledger</span>
+        </div>
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>#</th>
+                <th>Booking Ref</th>
+                <th>Customer Name</th>
+                <th className="text-end">Total Sale</th>
+                <th className="text-end">Received</th>
+                <th className="text-end">Balance</th>
+                <th className="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standardRows.length === 0 && <tr><td colSpan="7" className="text-center text-muted py-3">No walk-in balances pending.</td></tr>}
+              {standardRows.map((r, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td className="fw-bold text-secondary">{r.ref_no}</td>
+                  <td className="fw-semibold">{r.customer_name}</td>
+                  <td className="text-end">{fmt(r.sale_total)}</td>
+                  <td className="text-end">{fmt(r.received)}</td>
+                  <td className={`text-end fw-bold ${r.balance < 0 ? "text-primary" : "text-success"}`}>{fmt(r.balance)}</td>
+                  <td className="text-center">{getStatusBadge(r.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* SECTION 2: REGISTERED CUSTOMERS */}
+      <div className="card shadow-sm mb-4 border-start border-info border-3">
+        <div className="card-header bg-white fw-bold text-info d-flex justify-content-between align-items-center">
+          <span>🔑 Registered Ledger Customers Accounts</span>
+          <span className="badge bg-info-subtle text-info border border-info">Client Ledger</span>
+        </div>
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>#</th>
+                <th>Customer Code</th>
+                <th>Account Name</th>
+                <th className="text-end">Total Sales</th>
+                <th className="text-end">Total Received</th>
+                <th className="text-end">Current Balance</th>
+                <th className="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {registeredRows.length === 0 && <tr><td colSpan="7" className="text-center text-muted py-3">No registered customer balances pending.</td></tr>}
+              {registeredRows.map((r, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td className="fw-bold text-dark">{r.customer_code}</td>
+                  <td className="fw-semibold text-primary">{r.customer_name}</td>
+                  <td className="text-end text-dark">{fmt(r.sale_total)}</td>
+                  <td className="text-end text-dark">{fmt(r.received)}</td>
+                  <td className={`text-end fw-bold ${r.balance < 0 ? "text-primary" : "text-danger"}`}>{fmt(r.balance)}</td>
+                  <td className="text-center">{getStatusBadge(r.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* SECTION 3: SUPPLIERS */}
+      <div className="card shadow-sm mb-4 border-start border-danger border-3">
+        <div className="card-header bg-white fw-bold text-danger d-flex justify-content-between align-items-center">
+          <span>📦 Supplier Payable Accounts</span>
+          <span className="badge bg-danger-subtle text-danger border border-danger">Vendors Ledger</span>
+        </div>
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>#</th>
+                <th>Supplier Code</th>
+                <th>Supplier Name</th>
+                <th className="text-end">Total Purchase</th>
+                <th className="text-end">Paid Amount</th>
+                <th className="text-end">Payable Balance</th>
+                <th className="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supplierRows.length === 0 && <tr><td colSpan="7" className="text-center text-muted py-3">No supplier payables pending.</td></tr>}
+              {supplierRows.map((r, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td className="fw-bold text-secondary">{r.supplier_code}</td>
+                  <td className="fw-semibold">{r.supplier_name}</td>
+                  <td className="text-end">{fmt(r.purchase_total)}</td>
+                  <td className="text-end">{fmt(r.paid)}</td>
+                  <td className={`text-end fw-bold ${r.balance < 0 ? "text-primary" : "text-danger"}`}>{fmt(r.balance)}</td>
+                  <td className="text-center">{getStatusBadge(r.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* BLOCK-WISE FINAL BALANCE SHEET SUMMARY */}
+      <div className="card shadow-sm border-0">
+        <div className="card-header bg-dark text-white fw-bold py-3 d-flex justify-content-between align-items-center">
+          <span>📊 Block-wise Balance Sheet Audit Summary</span>
+          <small className="text-warning">Real-Time Ledger Audit</small>
+        </div>
+        <div className="card-body p-0">
+          <table className="table table-bordered mb-0 align-middle">
+            <tbody>
+              <tr className="table-light">
+                <td colSpan="2" className="fw-bold text-uppercase text-secondary">Block A: Cash & Bank Liquid Assets</td>
+              </tr>
+              <tr>
+                <td>💵 Cash in Hand Balance</td>
+                <td className="text-end fw-bold text-success">{fmt(cashInHand)}</td>
+              </tr>
+              <tr className="fw-bold bg-light">
+                <td>🏛️ Total Combined Bank Balance</td>
+                <td className="text-end text-primary">{fmt(bankBalance)}</td>
+              </tr>
+              <tr className="table-success table-opacity-10 fw-bold">
+                <td>💰 Total Liquid Funds (Cash + Total Banks)</td>
+                <td className="text-end text-success">{fmt(cashInHand + bankBalance)}</td>
+              </tr>
+
+              <tr className="table-light">
+                <td colSpan="2" className="fw-bold text-uppercase text-secondary">Block B: Receivables & Payables Ledger</td>
+              </tr>
+              <tr>
+                <td>🚶 Walk-In Customer Receivables</td>
+                <td className="text-end fw-bold text-info">{fmt(walkinReceivable)}</td>
+              </tr>
+              <tr>
+                <td>🔑 Registered Customer Receivables</td>
+                <td className="text-end fw-bold text-warning">{fmt(registeredReceivable)}</td>
+              </tr>
+              <tr className="fw-bold bg-light">
+                <td>📈 Total Customer Receivables</td>
+                <td className="text-end text-dark">{fmt(totalReceivable)}</td>
+              </tr>
+              <tr>
+                <td>📦 Total Supplier Payables</td>
+                <td className="text-end fw-bold text-danger">{fmt(totalPayable)}</td>
+              </tr>
+
+              <tr className="table-light">
+                <td colSpan="2" className="fw-bold text-uppercase text-secondary">Block C: Advance & Extra Adjustments</td>
+              </tr>
+              <tr>
+                <td>💎 Extra Received from Customers (Walk-In: {fmt(walkinExtraReceived)} | Reg: {fmt(registeredExtraReceived)})</td>
+                <td className="text-end fw-bold text-primary">{fmt(totalExtraReceived)}</td>
+              </tr>
+              <tr>
+                <td>💸 Extra Paid to Suppliers (Advance Supplier Credit / Asset)</td>
+                <td className="text-end fw-bold text-primary">{fmt(totalExtraPaid)}</td>
+              </tr>
+
+              <tr className="table-dark fw-bold fs-5">
+                <td>
+                  🔄 Net System Financial Position
+                  <br />
+                  <small className="fw-normal fs-6 text-light opacity-75">
+                    {netPosition >= 0 ? "Positive Net Position (Assets exceed Liabilities)" : "Negative Net Position (Liabilities exceed Assets)"}
+                  </small>
+                </td>
+                <td className={`text-end ${netPosition >= 0 ? "text-success" : "text-danger"}`}>
+                  PKR {fmt(Math.abs(netPosition))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
