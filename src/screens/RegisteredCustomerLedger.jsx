@@ -25,6 +25,15 @@ const formatDate = (d) => {
   return `${day}/${month}/${year}`;
 };
 
+const getTripDurationText = (dates) => {
+  if (!Array.isArray(dates) || dates.length < 2) return "Standard Duration";
+  const valid = dates.map((d) => new Date(d)).filter((d) => !isNaN(d.getTime())).sort((a, b) => a - b);
+  if (valid.length < 2) return "Standard Duration";
+  const diff = Math.ceil((valid[valid.length - 1] - valid[0]) / (1000 * 60 * 60 * 24));
+  return `${diff + 1} Days / ${diff} Nights`;
+};
+
+
 const getRowDate = (r) => {
   if (!r) return "-";
   return formatDate(r.date || r.payment_date || r.created_at);
@@ -81,6 +90,10 @@ export default function RegisteredCustomerLedger({ onNavigate }) {
   const [detailType, setDetailType] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailData, setDetailData] = useState(null);
+
+  const getModalTotalSar = () => Number(detailData?.total_sar || detailData?.grand_total_sar || 0);
+  const getModalPkrRate = () => Number(detailData?.pkr_rate || detailData?.rate || 0);
+  const getModalTotalPkr = () => Number(detailData?.total_pkr || detailData?.grand_total || detailData?.total_amount || 0);
 
   /* =========================
      LOAD BANK PROFILES
@@ -986,9 +999,9 @@ const editRow = async (row) => {
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="text-center p-4 text-muted fs-6">
-                        No transactions to display. Enter a Customer Code above and click "Load Ledger".
-                      </td>
+<td colSpan="7" className="text-center p-4 text-muted fs-6">
+  No transactions to display. Enter a Customer Code above and click "Load Ledger".
+</td>
                     </tr>
                   ) : (
                     rows.map((r, i) => {
