@@ -520,7 +520,7 @@ export default function CustomerLedger({ onNavigate }) {
     }
   };
 
-  /* =========================
+/* =========================
      EXPORT FUNCTIONS (PDF & EXCEL)
   ========================== */
   const exportPDF = () => {
@@ -545,6 +545,7 @@ export default function CustomerLedger({ onNavigate }) {
       toDate: "",
       ledgerData: rows,
       title: "CUSTOMER LEDGER STATEMENT",
+      filePrefix: `Customer_Ledger_${customerName}`,
     });
   };
 
@@ -570,6 +571,7 @@ export default function CustomerLedger({ onNavigate }) {
       toDate: "",
       ledgerData: rows,
       title: "CUSTOMER FINANCIAL LEDGER",
+      filePrefix: `Customer_Ledger_${customerName}`,
     });
   };
 
