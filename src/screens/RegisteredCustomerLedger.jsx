@@ -121,10 +121,7 @@ const loadPending = async () => {
       const uniqueCustomersMap = new Map();
 
       rawList.forEach((item) => {
-        // Customer Code ko strict sanitize karke filter karna
         const code = String(item.customer_code || "").trim().toUpperCase();
-
-        // Check: Agar Ref No ya Sale No galti se aaye (e.g. HOT-, PKG-, TIC-) toh usko filter out karein
         const isIndividualInvoiceRef = /^(HOT-|PKG-|TIC-|VISA-|ZIY-|TRN-|CARD-|GRP-)/i.test(code);
 
         if (!code || isIndividualInvoiceRef) return;
@@ -138,12 +135,6 @@ const loadPending = async () => {
             remaining_balance: bal,
             payment_status: item.payment_status || (bal < 0 ? "EXTRA PAID" : "PENDING")
           });
-        } else {
-          const existing = uniqueCustomersMap.get(code);
-          existing.remaining_balance += bal;
-          if (existing.remaining_balance < 0) {
-            existing.payment_status = "EXTRA PAID";
-          }
         }
       });
 
@@ -764,6 +755,7 @@ const editRow = async (row) => {
       toDate: endDate,
       ledgerData: rows,
       title: "REGISTERED CUSTOMER LEDGER STATEMENT",
+      filePrefix: `Customer_Ledger_${customerName}`,
     });
   };
 
@@ -775,6 +767,7 @@ const editRow = async (row) => {
       toDate: endDate,
       ledgerData: rows,
       title: "REGISTERED CUSTOMER FINANCIAL LEDGER",
+      filePrefix: `Customer_Ledger_${customerName}`,
     });
   };
 
