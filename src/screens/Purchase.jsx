@@ -105,7 +105,6 @@ const customTheme = (theme) => ({
   },
 });
 
-
 /* ===============================
    ITEM CATEGORY COLOR
 =============================== */
@@ -129,6 +128,7 @@ export default function Purchase({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [pendingMap, setPendingMap] = useState({});
+  const [customerName, setCustomerName] = useState("");
 
   /* ================= LOAD SUPPLIERS ================= */
   useEffect(() => {
@@ -138,143 +138,139 @@ export default function Purchase({ onNavigate }) {
   }, []);
 
   /* ================= LOAD PENDING ================= */
-const getCustomerName = (refNo, data) => {
-  return (
-    pendingMap[refNo] ||
-    data.rows?.find(r => r.customer_name)?.customer_name ||
-    data.rows?.[0]?.customer_name ||
-    "N/A"
-  );
-};
+  const getCustomerName = (refNo, data) => {
+    return (
+      pendingMap[refNo] ||
+      data.rows?.find((r) => r.customer_name)?.customer_name ||
+      data.rows?.[0]?.customer_name ||
+      "N/A"
+    );
+  };
 
-const loadPending = async () => {
-  const r = await fetch(
-    `${import.meta.env.VITE_BACKEND_URL}/api/purchase/pending`
-  );
-
-  const d = await r.json();
-
-  console.log("PENDING API:", d);
-
-  if (d.success) {
-    setPending(d.rows || []);
-  }
-};
-
-useEffect(() => {
-  loadPending();
-}, []);
-
-useEffect(() => {
-  const map = {};
-
-  pending.forEach((p) => {
-    map[p.ref_no] = p.customer_name;
-  });
-
-  setPendingMap(map);
-}, [pending]);
-
-  /* ================= LOAD PACKAGE (MANUAL) ================= */
-const loadPackage = async (r = refNo) => {
-
-  if (!r) {
-    return Swal.fire({
-      width: "300px",
-      icon: "warning",
-      text: "Ref No required"
-    });
-  }
-
-  setRefNo(r);
-  setLoading(true);
-
-  try {
-
-    const res = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/purchase/load/${r}`
+  const loadPending = async () => {
+    const r = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/api/purchase/pending`
     );
 
-    const data = await res.json(); // ✅ FIRST PARSE DATA
+    const d = await r.json();
 
-    console.log("API RESPONSE:", data); // ✅ FIXED POSITION
+    console.log("PENDING API:", d);
 
-    setLoading(false);
+    if (d.success) {
+      setPending(d.rows || []);
+    }
+  };
 
-    if (!data.success) {
-      setRows([]);
+  useEffect(() => {
+    loadPending();
+  }, []);
 
+  useEffect(() => {
+    const map = {};
+
+    pending.forEach((p) => {
+      map[p.ref_no] = p.customer_name;
+    });
+
+    setPendingMap(map);
+  }, [pending]);
+
+  /* ================= LOAD PACKAGE (MANUAL) ================= */
+  const loadPackage = async (r = refNo) => {
+    if (!r) {
       return Swal.fire({
         width: "300px",
-        icon: "error",
-        text: data.error || "Record not found"
+        icon: "warning",
+        text: "Ref No required",
       });
     }
 
-    // ======================
-    // EDIT MODE
-    // ======================
-    setIsEdit(data.is_edit === true);
+    setRefNo(r);
+    setLoading(true);
 
-    // ======================
-    // ROWS SET
-    // ======================
-    setRows(
-      (data.rows || []).map((x) => ({
-        item: x.item,
-        item_label: x.item_label,
-        sale_sar: parseNumber(x.sale_sar),
-        sale_rate: parseNumber(x.sale_rate),
-        sale_pkr: parseNumber(x.sale_pkr),
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/purchase/load/${r}`
+      );
 
-        purchase_sar: x.purchase_sar ? formatInput(String(x.purchase_sar)) : "",
-        purchase_rate: x.purchase_rate ? formatInput(String(x.purchase_rate)) : "",
-        purchase_pkr: parseNumber(x.purchase_pkr),
+      const data = await res.json();
 
-        profit: parseNumber(x.profit),
+      console.log("API RESPONSE:", data);
 
-        supplier_code: x.supplier_code || "",
-        supplier_name: x.supplier_name || "",
-      }))
-    );
+      setLoading(false);
 
-    // ======================
-    // CUSTOMER NAME FIXED (SAFE)
-    // ======================
-const customerName =
-  data.customer_name ||
-  data.customer ||
-  data.rows?.[0]?.customer_name ||
-  data.rows?.[0]?.cust_name ||
-  data.rows?.[0]?.client_name ||
-  pendingMap[r] ||
-  "N/A";
+      if (!data.success) {
+        setRows([]);
+        setCustomerName("");
 
-    // ======================
-    // SUCCESS POPUP
-    // ======================
-    Swal.fire({
-      width: "360px",
-      icon: "success",
-      html: `
+        return Swal.fire({
+          width: "300px",
+          icon: "error",
+          text: data.error || "Record not found",
+        });
+      }
+
+      // EDIT MODE
+      setIsEdit(data.is_edit === true);
+
+      // ROWS SET
+      setRows(
+        (data.rows || []).map((x) => ({
+          item: x.item,
+          item_label: x.item_label,
+          sale_sar: parseNumber(x.sale_sar),
+          sale_rate: parseNumber(x.sale_rate),
+          sale_pkr: parseNumber(x.sale_pkr),
+
+          purchase_sar: x.purchase_sar
+            ? formatInput(String(x.purchase_sar))
+            : "",
+          purchase_rate: x.purchase_rate
+            ? formatInput(String(x.purchase_rate))
+            : "",
+          purchase_pkr: parseNumber(x.purchase_pkr),
+
+          profit: parseNumber(x.profit),
+
+          supplier_code: x.supplier_code || "",
+          supplier_name: x.supplier_name || "",
+        }))
+      );
+
+      // CUSTOMER NAME SET
+      const cName =
+        data.customer_name ||
+        data.customer ||
+        data.rows?.[0]?.customer_name ||
+        data.rows?.[0]?.cust_name ||
+        data.rows?.[0]?.client_name ||
+        pendingMap[r] ||
+        "N/A";
+
+      setCustomerName(cName);
+
+      // SUCCESS POPUP
+      Swal.fire({
+        width: "360px",
+        icon: "success",
+        html: `
         <div style="text-align:left; font-size:13px">
           <b>✅ Data Loaded Successfully</b><br/><br/>
           <b>Ref No:</b> ${r}<br/>
-          <b>Customer:</b> ${customerName}<br/>
+          <b>Customer:</b> ${cName}<br/>
         </div>
-      `
-    });
+      `,
+      });
+    } catch (err) {
+      setLoading(false);
 
-  } catch (err) {
-    setLoading(false);
-
-    Swal.fire({
-      width: "300px",
-      icon: "error",
-      text: "Network Error"
-    });
-  }
-};
+      Swal.fire({
+        width: "300px",
+        icon: "error",
+        text: "Network Error",
+      });
+    }
+  };
 
   /* ================= UPDATE ROW ================= */
   const updateRow = (i, field, value) => {
@@ -300,93 +296,89 @@ const customerName =
   };
 
   /* ================= SAVE ================= */
-const savePurchase = async () => {
-
-  if (!rows.length) {
-    return Swal.fire({
-      width: "300px",
-      icon: "warning",
-      text: "No data to save"
-    });
-  }
-
-  const cleanRows = rows
-    .filter(
-      (r) =>
-        parseNumber(r.sale_sar) !== 0 ||
-        parseNumber(r.sale_rate) !== 0 ||
-        parseNumber(r.sale_pkr) !== 0
-    )
-    .map((r) => ({
-      ...r,
-      purchase_sar: parseNumber(r.purchase_sar),
-      purchase_rate: parseNumber(r.purchase_rate),
-    }));
-
-  if (!cleanRows.length) {
-    return Swal.fire({
-      width: "300px",
-      icon: "warning",
-      text: "No valid rows to save"
-    });
-  }
-
-  Swal.fire({
-    width: "260px",
-    title: "Saving...",
-    allowOutsideClick: false,
-    didOpen: () => Swal.showLoading()
-  });
-
-  try {
-
-    const res = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/api/purchase/save`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ref_no: refNo, items: cleanRows }),
-      }
-    );
-
-    const data = await res.json();
-
-    Swal.close();
-
-    if (data.success) {
-
-      await Swal.fire({
-        width: "280px",
-        icon: "success",
-        text: isEdit ? "Purchase Updated Successfully" : "Purchase Saved Successfully"
+  const savePurchase = async () => {
+    if (!rows.length) {
+      return Swal.fire({
+        width: "300px",
+        icon: "warning",
+        text: "No data to save",
       });
+    }
 
-      setRows([]);
-      setRefNo("");
-      setIsEdit(false);
-      loadPending();
-      onNavigate("purchase");
+    const cleanRows = rows
+      .filter(
+        (r) =>
+          parseNumber(r.sale_sar) !== 0 ||
+          parseNumber(r.sale_rate) !== 0 ||
+          parseNumber(r.sale_pkr) !== 0
+      )
+      .map((r) => ({
+        ...r,
+        purchase_sar: parseNumber(r.purchase_sar),
+        purchase_rate: parseNumber(r.purchase_rate),
+      }));
 
-    } else {
+    if (!cleanRows.length) {
+      return Swal.fire({
+        width: "300px",
+        icon: "warning",
+        text: "No valid rows to save",
+      });
+    }
+
+    Swal.fire({
+      width: "260px",
+      title: "Saving...",
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/purchase/save`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ref_no: refNo, items: cleanRows }),
+        }
+      );
+
+      const data = await res.json();
+
+      Swal.close();
+
+      if (data.success) {
+        await Swal.fire({
+          width: "280px",
+          icon: "success",
+          text: isEdit
+            ? "Purchase Updated Successfully"
+            : "Purchase Saved Successfully",
+        });
+
+        setRows([]);
+        setRefNo("");
+        setCustomerName("");
+        setIsEdit(false);
+        loadPending();
+        onNavigate("purchase");
+      } else {
+        Swal.fire({
+          width: "300px",
+          icon: "error",
+          text: data.error || "Save failed",
+        });
+      }
+    } catch (err) {
+      Swal.close();
 
       Swal.fire({
         width: "300px",
         icon: "error",
-        text: data.error || "Save failed"
+        text: "Network Error",
       });
     }
-
-  } catch (err) {
-
-    Swal.close();
-
-    Swal.fire({
-      width: "300px",
-      icon: "error",
-      text: "Network Error"
-    });
-  }
-};
+  };
 
   /* ================= PARTIAL CHECK ================= */
   const isPartial = rows
@@ -397,8 +389,7 @@ const savePurchase = async () => {
         parseNumber(r.sale_pkr) !== 0
     )
     .some(
-      (r) =>
-        !parseNumber(r.purchase_sar) || !parseNumber(r.purchase_rate)
+      (r) => !parseNumber(r.purchase_sar) || !parseNumber(r.purchase_rate)
     );
 
   const supplierOptions = suppliers.map((s) => ({
@@ -408,7 +399,7 @@ const savePurchase = async () => {
 
   /* ================= UI ================= */
   return (
-    <div className="container py-3" style={{ fontSize: "13px" }}>
+    <div className="container-fluid py-3" style={{ fontSize: "13px" }}>
       {/* HEADER */}
       <div
         className="mb-3 p-3 rounded-4 text-white shadow"
@@ -418,7 +409,9 @@ const savePurchase = async () => {
           <h5 className="fw-bold mb-0">
             🧾 Purchase Entry
             {isEdit && (
-              <span className="badge bg-warning text-dark ms-2">EDIT MODE</span>
+              <span className="badge bg-warning text-dark ms-2">
+                EDIT MODE
+              </span>
             )}
           </h5>
 
@@ -431,208 +424,297 @@ const savePurchase = async () => {
         </div>
       </div>
 
-      {/* PARTIAL ALERT */}
-      {isPartial && (
-        <div className="alert alert-warning fw-bold shadow-sm rounded-3">
-          ⚠️ Purchase PARTIAL hai
-        </div>
-      )}
-
-      {/* PENDING */}
-      <div className="card border-0 shadow-sm rounded-4 mb-3">
-        <div className="card-header bg-danger text-white fw-bold rounded-top-4">
-          ⏳ Pending / Partial Purchases
-        </div>
-
-        <div className="card-body p-2">
-          {pending.length === 0 ? (
-            <p className="text-success mb-0">✅ No pending</p>
-          ) : (
-            <ul className="list-group list-group-flush">
-              {pending.map((p, i) => (
-                <li
-                  key={i}
-                  className="list-group-item d-flex justify-content-between align-items-center"
-                >
-                  <div className="fw-bold">
-                    <span className="badge bg-dark me-2">{p.ref_no}</span>
-                    <span className="text-primary">{p.customer_name}</span>
-<span
-  className={`badge ms-2 ${
-    p.purchase_status === "PENDING"
-      ? "bg-danger"
-      : p.purchase_status === "PARTIAL"
-      ? "bg-warning text-dark"
-      : "bg-success"
-  }`}
->
-  {p.purchase_status}
-</span>
-                  </div>
-
-                  <button
-                    className="btn btn-sm btn-outline-primary"
-                    onClick={() => loadPackage(p.ref_no)}
-                  >
-                    Load
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* REF INPUT */}
-      <div className="card border-0 shadow-sm rounded-4 mb-3">
-        <div className="card-header bg-info text-white fw-bold rounded-top-4">
-          🔢 Enter Ref No
-        </div>
-
-        <div className="card-body d-flex gap-2">
-          <input
-            className="form-control form-control-sm"
-            placeholder="Enter Ref No..."
-            value={refNo}
-            onChange={(e) => setRefNo(e.target.value)}
-          />
-          <button className="btn btn-primary btn-sm fw-bold" onClick={() => loadPackage()}>
-            Load
-          </button>
-        </div>
-      </div>
-
-      {/* SAVE */}
-      <div className="card border-0 shadow-sm rounded-4 mb-3">
-        <div className="card-body d-flex justify-content-between align-items-center">
-          <h6 className="fw-bold mb-0">
-            💾 {isEdit ? "Update Purchase" : "Save Purchase"}
-          </h6>
-
-          <div className="d-flex gap-2">
-            <button
-              className={`btn btn-sm fw-bold ${isEdit ? "btn-warning text-dark" : "btn-success"}`}
-              onClick={savePurchase}
+      {/* MAIN GRID LAYOUT */}
+      <div className="row g-3">
+        {/* LEFT COLUMN: PENDING LIST (CHOTI WIDTH) */}
+        <div className="col-lg-3 col-md-4">
+          <div
+            className="card border-0 shadow-sm rounded-4 sticky-top"
+            style={{ top: "15px" }}
+          >
+            <div
+              className="card-header bg-danger text-white fw-bold rounded-top-4 py-2 px-3"
+              style={{ fontSize: "12px" }}
             >
-              {isEdit ? "✏ Update Purchase" : "💾 Save Purchase"}
-            </button>
+              ⏳ Pending / Partial Purchases
+            </div>
 
-            {isEdit && (
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  setRows([]);
-                  setRefNo("");
-                  setIsEdit(false);
-                }}
-              >
-                Cancel
-              </button>
-            )}
+            <div
+              className="card-body p-2"
+              style={{ maxHeight: "calc(100vh - 120px)", overflowY: "auto" }}
+            >
+              {pending.length === 0 ? (
+                <p className="text-success mb-0 p-2">✅ No pending</p>
+              ) : (
+                <ul className="list-group list-group-flush">
+                  {pending.map((p, i) => (
+                    <li
+                      key={i}
+                      className="list-group-item d-flex justify-content-between align-items-center px-2 py-2"
+                    >
+                      <div
+                        className="fw-bold"
+                        style={{ fontSize: "11px", minWidth: 0 }}
+                      >
+                        <div className="d-flex align-items-center gap-1 mb-1">
+                          <span
+                            className="badge bg-dark"
+                            style={{ fontSize: "10px" }}
+                          >
+                            {p.ref_no}
+                          </span>
+                          <span
+                            className={`badge ${
+                              p.purchase_status === "PENDING"
+                                ? "bg-danger"
+                                : p.purchase_status === "PARTIAL"
+                                ? "bg-warning text-dark"
+                                : "bg-success"
+                            }`}
+                            style={{ fontSize: "9px" }}
+                          >
+                            {p.purchase_status}
+                          </span>
+                        </div>
+                        <div
+                          className="text-primary text-truncate"
+                          style={{ maxWidth: "120px" }}
+                        >
+                          {p.customer_name}
+                        </div>
+                      </div>
+
+                      <button
+                        className="btn btn-xs btn-outline-primary fw-bold py-1 px-2"
+                        style={{ fontSize: "11px" }}
+                        onClick={() => loadPackage(p.ref_no)}
+                      >
+                        Load
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* TABLE */}
-      <div className="card border-0 shadow rounded-4 overflow-hidden">
-        <div className="table-responsive">
-          <table className="table table-sm table-hover align-middle mb-0">
-            <thead
-              className="text-white"
-              style={{ background: "linear-gradient(135deg,#000,#434343)", fontSize: "12px" }}
+        {/* RIGHT COLUMN: MAIN FORM & TABLE */}
+        <div className="col-lg-9 col-md-8">
+          {/* PARTIAL ALERT */}
+          {isPartial && (
+            <div
+              className="alert alert-warning fw-bold shadow-sm rounded-3 py-2 px-3 mb-2"
+              style={{ fontSize: "12px" }}
             >
-              <tr>
-                <th>Item</th>
-                <th>Sale SAR</th>
-                <th>Rate</th>
-                <th>Sale PKR</th>
-                <th>Purchase SAR</th>
-                <th>Purchase Rate</th>
-                <th>Purchase PKR</th>
-                <th>Profit</th>
-                <th>Supplier</th>
-              </tr>
-            </thead>
+              ⚠️ Purchase PARTIAL hai
+            </div>
+          )}
 
-            <tbody>
-              {rows
-                .map((r, i) => ({ ...r, originalIndex: i }))
-                .filter(
-                  (r) =>
-                    parseNumber(r.sale_sar) !== 0 ||
-                    parseNumber(r.sale_rate) !== 0 ||
-                    parseNumber(r.sale_pkr) !== 0
-                )
-                .map((r, i) => {
-                  const isIncomplete =
-                    (parseNumber(r.sale_sar) !== 0 ||
-                      parseNumber(r.sale_rate) !== 0 ||
-                      parseNumber(r.sale_pkr) !== 0) &&
-                    (!parseNumber(r.purchase_sar) || !parseNumber(r.purchase_rate));
+          {/* REF INPUT */}
+          <div className="card border-0 shadow-sm rounded-4 mb-3">
+            <div
+              className="card-header bg-info text-white fw-bold rounded-top-4 py-2 px-3"
+              style={{ fontSize: "12px" }}
+            >
+              🔢 Enter Ref No
+            </div>
 
-                  return (
-                    <tr
-                      key={i}
-                      className={isIncomplete ? "table-danger" : ""}
-                      style={{ transition: "0.2s", cursor: "pointer" }}
-                    >
-                      <td className="fw-bold" style={{ color: itemCategoryColor(r.item_label || r.item) }}>
-                        {r.item_label || r.item}
-                      </td>
+            <div className="card-body d-flex gap-2 py-2">
+              <input
+                className="form-control form-control-sm"
+                placeholder="Enter Ref No..."
+                value={refNo}
+                onChange={(e) => setRefNo(e.target.value)}
+              />
+              <button
+                className="btn btn-primary btn-sm fw-bold px-3"
+                onClick={() => loadPackage()}
+              >
+                Load
+              </button>
+            </div>
+          </div>
 
-                      <td>{r.sale_sar}</td>
-                      <td>{r.sale_rate}</td>
-                      <td className="fw-bold text-primary">{r.sale_pkr.toLocaleString()}</td>
+          {/* SAVE / UPDATE PATTI WITH CUSTOMER NAME */}
+          <div className="card border-0 shadow-sm rounded-4 mb-3">
+            <div className="card-body d-flex justify-content-between align-items-center py-2 px-3">
+              <div className="d-flex align-items-center gap-2">
+                <h6 className="fw-bold mb-0" style={{ fontSize: "13px" }}>
+                  💾 {isEdit ? "Update Purchase" : "Save Purchase"}
+                </h6>
+                {customerName && (
+                  <span className="badge bg-primary text-white fw-bold px-3 py-1 rounded-pill" style={{ fontSize: "12px" }}>
+                    👤 {customerName}
+                  </span>
+                )}
+              </div>
 
-                      <td>
-                        <input
-                          className="form-control form-control-sm"
-                          value={r.purchase_sar}
-                          onChange={(e) => updateRow(r.originalIndex, "purchase_sar", e.target.value)}
-                        />
-                      </td>
+              <div className="d-flex gap-2">
+                <button
+                  className={`btn btn-sm fw-bold ${
+                    isEdit ? "btn-warning text-dark" : "btn-success"
+                  }`}
+                  onClick={savePurchase}
+                >
+                  {isEdit ? "✏ Update Purchase" : "💾 Save Purchase"}
+                </button>
 
-                      <td>
-                        <input
-                          className="form-control form-control-sm"
-                          value={r.purchase_rate}
-                          onChange={(e) => updateRow(r.originalIndex, "purchase_rate", e.target.value)}
-                        />
-                      </td>
+                {isEdit && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setRows([]);
+                      setRefNo("");
+                      setCustomerName("");
+                      setIsEdit(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
 
-                      <td className="fw-bold">{r.purchase_pkr.toLocaleString()}</td>
+          {/* TABLE */}
+          <div className="card border-0 shadow rounded-4 overflow-hidden mb-3">
+            <div className="table-responsive">
+              <table className="table table-sm table-hover align-middle mb-0">
+                <thead
+                  className="text-white"
+                  style={{
+                    background: "linear-gradient(135deg,#000,#434343)",
+                    fontSize: "12px",
+                  }}
+                >
+                  <tr>
+                    <th>Item</th>
+                    <th>Sale SAR</th>
+                    <th>Rate</th>
+                    <th>Sale PKR</th>
+                    <th>Purchase SAR</th>
+                    <th>Purchase Rate</th>
+                    <th>Purchase PKR</th>
+                    <th>Profit</th>
+                    <th>Supplier</th>
+                  </tr>
+                </thead>
 
-                      <td className={`fw-bold ${r.profit >= 0 ? "text-success" : "text-danger"}`}>
-                        {r.profit.toLocaleString()}
-                      </td>
+                <tbody>
+                  {rows
+                    .map((r, i) => ({ ...r, originalIndex: i }))
+                    .filter(
+                      (r) =>
+                        parseNumber(r.sale_sar) !== 0 ||
+                        parseNumber(r.sale_rate) !== 0 ||
+                        parseNumber(r.sale_pkr) !== 0
+                    )
+                    .map((r, i) => {
+                      const isIncomplete =
+                        (parseNumber(r.sale_sar) !== 0 ||
+                          parseNumber(r.sale_rate) !== 0 ||
+                          parseNumber(r.sale_pkr) !== 0) &&
+                        (!parseNumber(r.purchase_sar) ||
+                          !parseNumber(r.purchase_rate));
 
-                      <td style={{ minWidth: "220px" }}>
-<Select
-  options={supplierOptions}
-  value={supplierOptions.find((opt) => opt.value === r.supplier_code) || null}
-  onChange={(selected) =>
-    updateRow(
-      r.originalIndex,
-      "supplier_code",
-      selected ? selected.value : ""
-    )
-  }
-  placeholder="🔍 Select Supplier..."
-  isClearable
-  isSearchable
-  menuPortalTarget={document.body}
-  styles={{
-    ...customSelectStyles,
-    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-  }}
-  theme={customTheme}
-/>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
+                      return (
+                        <tr
+                          key={i}
+                          className={isIncomplete ? "table-danger" : ""}
+                          style={{ transition: "0.2s", cursor: "pointer" }}
+                        >
+                          <td
+                            className="fw-bold"
+                            style={{
+                              color: itemCategoryColor(r.item_label || r.item),
+                            }}
+                          >
+                            {r.item_label || r.item}
+                          </td>
+
+                          <td>{r.sale_sar}</td>
+                          <td>{r.sale_rate}</td>
+                          <td className="fw-bold text-primary">
+                            {r.sale_pkr.toLocaleString()}
+                          </td>
+
+                          <td>
+                            <input
+                              className="form-control form-control-sm"
+                              value={r.purchase_sar}
+                              onChange={(e) =>
+                                updateRow(
+                                  r.originalIndex,
+                                  "purchase_sar",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </td>
+
+                          <td>
+                            <input
+                              className="form-control form-control-sm"
+                              value={r.purchase_rate}
+                              onChange={(e) =>
+                                updateRow(
+                                  r.originalIndex,
+                                  "purchase_rate",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </td>
+
+                          <td className="fw-bold">
+                            {r.purchase_pkr.toLocaleString()}
+                          </td>
+
+                          <td
+                            className={`fw-bold ${
+                              r.profit >= 0 ? "text-success" : "text-danger"
+                            }`}
+                          >
+                            {r.profit.toLocaleString()}
+                          </td>
+
+                          <td style={{ minWidth: "200px" }}>
+                            <Select
+                              options={supplierOptions}
+                              value={
+                                supplierOptions.find(
+                                  (opt) => opt.value === r.supplier_code
+                                ) || null
+                              }
+                              onChange={(selected) =>
+                                updateRow(
+                                  r.originalIndex,
+                                  "supplier_code",
+                                  selected ? selected.value : ""
+                                )
+                              }
+                              placeholder="🔍 Select..."
+                              isClearable
+                              isSearchable
+                              menuPortalTarget={document.body}
+                              styles={{
+                                ...customSelectStyles,
+                                menuPortal: (base) => ({
+                                  ...base,
+                                  zIndex: 9999,
+                                }),
+                              }}
+                              theme={customTheme}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
