@@ -1,3 +1,27 @@
+/* Fixed Desktop Width to allow mobile browsers to scale naturally */
+html, body, #root {
+  min-width: 1200px !important;
+  width: 1200px !important;
+  margin: 0 auto;
+  overflow-x: auto !important;
+}
+
+.dashboard-container {
+  min-width: 1200px !important;
+  width: 1200px !important;
+  box-sizing: border-box;
+}
+
+/* Ensure Top Bar retains side-by-side Desktop Layout */
+.dashboard-top-bar {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+}
+
+
 /* PAGE - Glass + Gradient Overlay */
 .dashboard-container {
   min-height: 100vh;
