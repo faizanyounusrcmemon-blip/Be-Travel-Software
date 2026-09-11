@@ -126,12 +126,16 @@ export default function Transport({ onNavigate }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const addRow = () => setRows([...rows, { description: "", sar: 0 }]);
-  const updateRow = (i, field, value) => {
-    const copy = [...rows];
-    copy[i][field] = field === "description" ? value : Number(value) || 0;
-    setRows(copy);
-  };
+// 1. addRow function update karen
+const addRow = () => setRows([...rows, { travel_date: "", description: "", sar: 0 }]);
+
+// 2. updateRow function update
+const updateRow = (i, field, value) => {
+  const copy = [...rows];
+  copy[i][field] = field === "description" || field === "travel_date" ? value : Number(value) || 0;
+  setRows(copy);
+};
+
   const removeRow = (i) => setRows(rows.filter((_, x) => x !== i));
 
   const totalSar = rows.reduce((sum, r) => sum + (Number(r.sar) || 0), 0);
@@ -504,24 +508,55 @@ export default function Transport({ onNavigate }) {
         <div className="mb-3">
           <h5 style={styles.sectionHeader}>🚌 Transport</h5>
           <button className="btn btn-outline-success btn-sm mb-2" style={styles.button} onClick={addRow}>➕ Add Row</button>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Description</th>
-                <th style={styles.th}>SAR</th>
-                <th style={styles.th}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i} style={{ background: i % 2 === 0 ? "#f0fff0" : "#fff" }}>
-                  <td style={styles.td}><input className="form-control" value={r.description} onChange={(e) => updateRow(i, "description", e.target.value)} /></td>
-                  <td style={styles.td}><input type="number" className="form-control" value={r.sar} onChange={(e) => updateRow(i, "sar", e.target.value)} /></td>
-                  <td style={{...styles.td, textAlign: "center"}}><button className="btn btn-sm btn-danger" onClick={() => removeRow(i)}>✖</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+<table style={styles.table}>
+  <thead>
+    <tr>
+      <th style={{ ...styles.th, width: "220px" }}>Travel Date</th>
+      <th style={styles.th}>Description</th>
+      <th style={styles.th}>SAR</th>
+      <th style={styles.th}>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {rows.map((r, i) => (
+      <tr key={i} style={{ background: i % 2 === 0 ? "#f0fff0" : "#fff" }}>
+        {/* Date Input with dd/Mmm/yyyy preview */}
+        <td style={styles.td}>
+          <input
+            type="date"
+            className="form-control form-control-sm mb-1"
+            value={r.travel_date || ""}
+            onChange={(e) => updateRow(i, "travel_date", e.target.value)}
+          />
+          <small className="text-muted d-block fw-bold">
+            {showDate(r.travel_date)}
+          </small>
+        </td>
+
+        <td style={styles.td}>
+          <input
+            className="form-control"
+            value={r.description}
+            onChange={(e) => updateRow(i, "description", e.target.value)}
+          />
+        </td>
+        
+        <td style={styles.td}>
+          <input
+            type="number"
+            className="form-control"
+            value={r.sar}
+            onChange={(e) => updateRow(i, "sar", e.target.value)}
+          />
+        </td>
+
+        <td style={{ ...styles.td, textAlign: "center" }}>
+          <button className="btn btn-sm btn-danger" onClick={() => removeRow(i)}>✖</button>
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
         </div>
 
         {/* Summary */}
