@@ -6,18 +6,16 @@ import Header from "../components/Header";
 const fmt = (v) => Number(v || 0).toLocaleString("en-US");
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "-");
 
-
-
 export default function VisaView({ id, onNavigate, fromPage }) {
   const [data, setData] = useState(null);
   const ref = useRef(null);
 
-const { exportPDF, printPDF } = usePdf(ref, {
-  filePrefix: "Visa",
-  customerName: data?.customer_name,
-  bookingDate: data?.booking_date,
-  orientation: "p",
-});
+  const { exportPDF, printPDF } = usePdf(ref, {
+    filePrefix: "Visa",
+    customerName: data?.customer_name,
+    bookingDate: data?.booking_date,
+    orientation: "p",
+  });
 
   /* ================= LOAD VISA ================= */
   useEffect(() => {
@@ -51,27 +49,23 @@ const { exportPDF, printPDF } = usePdf(ref, {
       .catch(() => Swal.fire("Error", "Load failed", "error"));
   }, [id]);
 
-  /* ================= EXPORT PDF ================= */
-
-
   if (!data) return <div className="p-3">Loading...</div>;
 
   return (
     <div className="container mt-3 mb-5">
-
       {/* ===== ACTIONS ===== */}
       <div className="d-flex gap-2 mb-3 flex-wrap">
-<button
-  className="btn btn-sm text-white fw-bold shadow"
-  style={{
-    background: "linear-gradient(135deg,#000,#434343)",
-    borderRadius: 8,
-    padding: "6px 16px",
-  }}
-  onClick={() => onNavigate(fromPage || "allreports")}
->
-  ⬅ Back
-</button>
+        <button
+          className="btn btn-sm text-white fw-bold shadow"
+          style={{
+            background: "linear-gradient(135deg,#000,#434343)",
+            borderRadius: 8,
+            padding: "6px 16px",
+          }}
+          onClick={() => onNavigate(fromPage || "allreports")}
+        >
+          ⬅ Back
+        </button>
 
         <button
           className="btn btn-success btn-sm fw-bold shadow"
@@ -121,16 +115,29 @@ const { exportPDF, printPDF } = usePdf(ref, {
           <p className="text-muted">No visa rows</p>
         )}
 
-        {data.rows.map((r, i) => (
-          <div
-            key={i}
-            className="border rounded p-2 mb-2 shadow-sm d-flex justify-content-between"
-          >
-            <div>{r.type}</div>
-            <div className="text-center">{r.persons}</div>
-            <div className="fw-bold">{fmt(r.total)}</div>
-          </div>
-        ))}
+        {data.rows.map((r, i) => {
+          const qty = Number(r.persons || 1);
+          const total = Number(r.total || 0);
+          const unitRate = r.rate ? Number(r.rate) : qty > 0 ? total / qty : 0;
+
+          return (
+            <div
+              key={i}
+              className="border rounded p-2 mb-2 shadow-sm d-flex justify-content-between align-items-center"
+            >
+              <div style={{ flex: 1 }}><b>Type:</b> {r.type}</div>
+              <div className="text-center" style={{ flex: 1 }}>
+                <b>Persons:</b> {r.persons}
+              </div>
+              <div className="text-center text-muted" style={{ flex: 1 }}>
+                <b>Rate (1 Visa):</b> {fmt(unitRate)}
+              </div>
+              <div className="fw-bold text-end" style={{ flex: 1 }}>
+                <b>Total:</b> {fmt(r.total)}
+              </div>
+            </div>
+          );
+        })}
 
         <hr />
 
