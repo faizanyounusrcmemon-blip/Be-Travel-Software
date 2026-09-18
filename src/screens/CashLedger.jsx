@@ -38,14 +38,25 @@ const getDescriptionColor = (desc) => {
   if (!desc) return "text-secondary";
   const str = desc.toLowerCase();
 
+  // 1. Supplier / Purchase / Vendor (Success / Green / Teal)
   if (str.includes("supplier") || str.includes("purchase") || str.includes("vendor")) {
-    return "text-success fw-bold"; // Supplier (Orange / Yellow)
+    return "text-success fw-bold";
   }
+  // 2. Customer / Sale / Client (Primary / Blue)
   if (str.includes("customer") || str.includes("sale") || str.includes("client")) {
-    return "text-primary fw-bold"; // Customer (Blue)
+    return "text-primary fw-bold";
   }
+  // 3. Expense / Pay / Bill (Danger / Red)
   if (str.includes("expense") || str.includes("pay") || str.includes("bill")) {
-    return "text-danger fw-bold"; // Expense (Red)
+    return "text-danger fw-bold";
+  }
+  // 4. Deposit / Cash In (Green / Success Color)
+  if (str.includes("deposit") || str.includes("cash in") || str.includes("received")) {
+    return "text-success fw-bold"; 
+  }
+  // 5. Withdraw / Cash Out (Warning / Orange ya Danger / Red Color)
+  if (str.includes("withdraw") || str.includes("cash out") || str.includes("paid")) {
+    return "text-warning fw-bold"; // Ya "text-danger fw-bold" jo aapko prefer ho
   }
 
   return "text-dark fw-semibold"; // Normal Text
