@@ -33,27 +33,27 @@ const formatDate = (dateStr) => {
   return `${day}/${month}/${year}`;
 };
 
-/* ================= DESCRIPTION COLOR HELPER ================= */
+/* ================= ENHANCED DESCRIPTION COLOR HELPER ================= */
 const getDescriptionColor = (desc, debit, credit) => {
   const str = (desc || "").toLowerCase();
 
-  // 1. Supplier / Purchase / Vendor
+  // 1. Supplier / Purchase / Vendor (Purple/Indigo style)
   if (str.includes("supplier") || str.includes("purchase") || str.includes("vendor")) {
-    return "text-success fw-bold";
+    return "text-purple-custom fw-bold";
   }
-  // 2. Customer / Sale / Client
+  // 2. Customer / Sale / Client (Blue style)
   if (str.includes("customer") || str.includes("sale") || str.includes("client")) {
     return "text-primary fw-bold";
   }
-  // 3. Expense / Pay / Bill
+  // 3. Expense / Pay / Bill (Orange/Warning style)
   if (str.includes("expense") || str.includes("pay") || str.includes("bill")) {
-    return "text-danger fw-bold";
+    return "text-warning-custom fw-bold";
   }
-  // 4. Deposit / Cash In
+  // 4. Deposit / Cash In (Green style)
   if (str.includes("deposit") || str.includes("cash in") || normalizeZero(credit) > 0) {
     return "text-success fw-bold";
   }
-  // 5. Withdraw / Cash Out
+  // 5. Withdraw / Cash Out (Red style)
   if (str.includes("withdraw") || str.includes("cash out") || normalizeZero(debit) > 0) {
     return "text-danger fw-bold";
   }
@@ -556,6 +556,10 @@ export default function CashLedger({ onNavigate }) {
         .report-table th { background: linear-gradient(135deg, #073d7a, #0d6efd); color: #fff; padding: 8px 5px; white-space: nowrap; }
         .report-table td { padding: 6px 5px; border-bottom: 1px solid #edf1f5; vertical-align: middle; }
         .report-table tbody tr:hover { background: #f8fbff; }
+
+        /* Custom Colors for Description Categories */
+        .text-purple-custom { color: #6f42c1 !important; }
+        .text-warning-custom { color: #fd7e14 !important; }
       `}</style>
 
       <div className="ledger-shell">
@@ -730,31 +734,27 @@ export default function CashLedger({ onNavigate }) {
                   paginatedRows.map((r, i) => (
                     <tr key={i}>
                       <td className="text-center fw-semibold">{formatDate(r.txn_date)}</td>
-<td className={getDescriptionColor(r.description, r.debit, r.credit)}>
-  {(() => {
-    // Check if it's credit or debit
-    const isCredit = normalizeZero(r.credit) > 0;
-    const isDebit = normalizeZero(r.debit) > 0;
+                      <td className={getDescriptionColor(r.description, r.debit, r.credit)}>
+                        {(() => {
+                          const isCredit = normalizeZero(r.credit) > 0;
+                          const isDebit = normalizeZero(r.debit) > 0;
 
-    // Agar system generated hai (e.g. Customer/Supplier Payment) to wahi dikhaye
-    if (r.source !== "manual") {
-      return r.description || "-";
-    }
+                          if (r.source !== "manual") {
+                            return r.description || "-";
+                          }
 
-    // Manual Form Entry ke liye Prefix + Optional Comment formatting:
-    const prefix = isCredit ? "Cash Deposit" : isDebit ? "Cash Withdraw" : "";
-    
-    if (!r.description) return prefix || "-";
+                          const prefix = isCredit ? "Cash Deposit" : isDebit ? "Cash Withdraw" : "";
+                          
+                          if (!r.description) return prefix || "-";
 
-    // Agar comment me pehle se Deposit/Withdraw likha ho to duplicate na kare
-    const lowerDesc = r.description.toLowerCase();
-    if (lowerDesc.startsWith("cash deposit") || lowerDesc.startsWith("cash withdraw")) {
-      return r.description;
-    }
+                          const lowerDesc = r.description.toLowerCase();
+                          if (lowerDesc.startsWith("cash deposit") || lowerDesc.startsWith("cash withdraw")) {
+                            return r.description;
+                          }
 
-    return prefix ? `${prefix} - ${r.description}` : r.description;
-  })()}
-</td>
+                          return prefix ? `${prefix} - ${r.description}` : r.description;
+                        })()}
+                      </td>
                       <td style={{ textAlign: "right" }} className="text-danger fw-bold">
                         {normalizeZero(r.debit) > 0 ? fmtAmt(r.debit) : "-"}
                       </td>
