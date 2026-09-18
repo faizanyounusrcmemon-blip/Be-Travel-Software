@@ -34,32 +34,31 @@ const formatDate = (dateStr) => {
 };
 
 /* ================= DESCRIPTION COLOR HELPER ================= */
-const getDescriptionColor = (desc) => {
-  if (!desc) return "text-secondary";
-  const str = desc.toLowerCase();
+const getDescriptionColor = (desc, debit, credit) => {
+  const str = (desc || "").toLowerCase();
 
-  // 1. Supplier / Purchase / Vendor (Success / Green / Teal)
+  // 1. Supplier / Purchase / Vendor
   if (str.includes("supplier") || str.includes("purchase") || str.includes("vendor")) {
     return "text-success fw-bold";
   }
-  // 2. Customer / Sale / Client (Primary / Blue)
+  // 2. Customer / Sale / Client
   if (str.includes("customer") || str.includes("sale") || str.includes("client")) {
     return "text-primary fw-bold";
   }
-  // 3. Expense / Pay / Bill (Danger / Red)
+  // 3. Expense / Pay / Bill
   if (str.includes("expense") || str.includes("pay") || str.includes("bill")) {
     return "text-danger fw-bold";
   }
-  // 4. Deposit / Cash In (Green / Success Color)
-  if (str.includes("deposit") || str.includes("cash in") || str.includes("received")) {
-    return "text-success fw-bold"; 
+  // 4. Deposit / Cash In
+  if (str.includes("deposit") || str.includes("cash in") || normalizeZero(credit) > 0) {
+    return "text-success fw-bold";
   }
-  // 5. Withdraw / Cash Out (Warning / Orange ya Danger / Red Color)
-  if (str.includes("withdraw") || str.includes("cash out") || str.includes("paid")) {
-    return "text-warning fw-bold"; // Ya "text-danger fw-bold" jo aapko prefer ho
+  // 5. Withdraw / Cash Out
+  if (str.includes("withdraw") || str.includes("cash out") || normalizeZero(debit) > 0) {
+    return "text-danger fw-bold";
   }
 
-  return "text-dark fw-semibold"; // Normal Text
+  return "text-dark fw-semibold";
 };
 
 const numberToWords = (num) => {
@@ -720,55 +719,61 @@ export default function CashLedger({ onNavigate }) {
                   <th style={{ width: "12%", textAlign: "center" }}>Actions</th>
                 </tr>
               </thead>
-<tbody style={{ fontSize: "12px" }}>
-  {paginatedRows.length === 0 ? (
-    <tr>
-      <td colSpan="6" className="text-center py-4 text-muted">
-        No cash transaction entries found.
-      </td>
-    </tr>
-  ) : (
-    paginatedRows.map((r, i) => (
-      <tr key={i}>
-        <td className="text-center fw-semibold">{formatDate(r.txn_date)}</td>
-        <td className={getDescriptionColor(r.description)}>
-          {r.description || "-"}
-        </td>
-        <td style={{ textAlign: "right" }} className="text-danger fw-bold">
-          {normalizeZero(r.debit) > 0 ? fmtAmt(r.debit) : "-"}
-        </td>
-        <td style={{ textAlign: "right" }} className="text-success fw-bold">
-          {normalizeZero(r.credit) > 0 ? fmtAmt(r.credit) : "-"}
-        </td>
-        <td style={{ textAlign: "right" }} className="fw-bold text-dark">
-          {fmtAmt(r.balance)}
-        </td>
-        <td style={{ textAlign: "center" }}>
-          {r.source === "manual" ? (
-            <div className="d-flex gap-1 justify-content-center">
-              <button
-                className="btn btn-outline-primary btn-sm py-0 px-1"
-                style={{ fontSize: "10px" }}
-                onClick={() => editRow(r)}
-              >
-                Edit
-              </button>
-              <button
-                className="btn btn-outline-danger btn-sm py-0 px-1"
-                style={{ fontSize: "10px" }}
-                onClick={() => del(r.id)}
-              >
-                Del
-              </button>
-            </div>
-          ) : (
-            <span className="text-muted small">-</span>
-          )}
-        </td>
-      </tr>
-    ))
-  )}
-</tbody>
+              <tbody style={{ fontSize: "12px" }}>
+                {paginatedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-4 text-muted">
+                      No cash transaction entries found.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedRows.map((r, i) => (
+                    <tr key={i}>
+                      <td className="text-center fw-semibold">{formatDate(r.txn_date)}</td>
+                      <td className={getDescriptionColor(r.description, r.debit, r.credit)}>
+                        {r.description
+                          ? r.description
+                          : normalizeZero(r.credit) > 0
+                          ? "Cash Deposit"
+                          : normalizeZero(r.debit) > 0
+                          ? "Cash Withdraw"
+                          : "-"}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="text-danger fw-bold">
+                        {normalizeZero(r.debit) > 0 ? fmtAmt(r.debit) : "-"}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="text-success fw-bold">
+                        {normalizeZero(r.credit) > 0 ? fmtAmt(r.credit) : "-"}
+                      </td>
+                      <td style={{ textAlign: "right" }} className="fw-bold text-dark">
+                        {fmtAmt(r.balance)}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {r.source === "manual" ? (
+                          <div className="d-flex gap-1 justify-content-center">
+                            <button
+                              className="btn btn-outline-primary btn-sm py-0 px-1"
+                              style={{ fontSize: "10px" }}
+                              onClick={() => editRow(r)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-outline-danger btn-sm py-0 px-1"
+                              style={{ fontSize: "10px" }}
+                              onClick={() => del(r.id)}
+                            >
+                              Del
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-muted small">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
             </table>
           </div>
 
