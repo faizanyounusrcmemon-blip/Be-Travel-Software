@@ -82,10 +82,7 @@ export default function ManageUsers({ onNavigate }) {
         "customer_sale_detail_report",
         "item_loss_zero_report",
         "sale_change_check_report",
-        "gifting_report_view",
-        "agent_comm_report_view",
-        "upcoming_payment_due_report",
-        "upcoming_travel_report",
+
       ],
     },
     {
