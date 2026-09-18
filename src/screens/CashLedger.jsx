@@ -730,15 +730,31 @@ export default function CashLedger({ onNavigate }) {
                   paginatedRows.map((r, i) => (
                     <tr key={i}>
                       <td className="text-center fw-semibold">{formatDate(r.txn_date)}</td>
-                      <td className={getDescriptionColor(r.description, r.debit, r.credit)}>
-                        {r.description
-                          ? r.description
-                          : normalizeZero(r.credit) > 0
-                          ? "Cash Deposit"
-                          : normalizeZero(r.debit) > 0
-                          ? "Cash Withdraw"
-                          : "-"}
-                      </td>
+<td className={getDescriptionColor(r.description, r.debit, r.credit)}>
+  {(() => {
+    // Check if it's credit or debit
+    const isCredit = normalizeZero(r.credit) > 0;
+    const isDebit = normalizeZero(r.debit) > 0;
+
+    // Agar system generated hai (e.g. Customer/Supplier Payment) to wahi dikhaye
+    if (r.source !== "manual") {
+      return r.description || "-";
+    }
+
+    // Manual Form Entry ke liye Prefix + Optional Comment formatting:
+    const prefix = isCredit ? "Cash Deposit" : isDebit ? "Cash Withdraw" : "";
+    
+    if (!r.description) return prefix || "-";
+
+    // Agar comment me pehle se Deposit/Withdraw likha ho to duplicate na kare
+    const lowerDesc = r.description.toLowerCase();
+    if (lowerDesc.startsWith("cash deposit") || lowerDesc.startsWith("cash withdraw")) {
+      return r.description;
+    }
+
+    return prefix ? `${prefix} - ${r.description}` : r.description;
+  })()}
+</td>
                       <td style={{ textAlign: "right" }} className="text-danger fw-bold">
                         {normalizeZero(r.debit) > 0 ? fmtAmt(r.debit) : "-"}
                       </td>
