@@ -80,6 +80,8 @@ export default function ManageUsers({ onNavigate }) {
         "supplier_adjustment_only",
         "supplier_purchase_detail_report",
         "customer_sale_detail_report",
+        "gifting_report_view",
+        "agent_comm_report_view",
         "item_loss_zero_report",
         "sale_change_check_report",
 
