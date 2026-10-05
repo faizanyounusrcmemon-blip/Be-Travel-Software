@@ -1,6 +1,27 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Swal from "sweetalert2";
 
+/* ================= CLICK COPY HANDLER ================= */
+const handleCopyRef = (refNo) => {
+  if (!refNo || refNo === "-") return;
+
+  navigator.clipboard.writeText(refNo).then(() => {
+    // SweetAlert2 Toast alert
+    Swal.fire({
+      icon: "success",
+      title: "Copied!",
+      text: `Ref No: ${refNo} copied to clipboard`,
+      toast: true,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 1500,
+      timerProgressBar: true,
+    });
+  }).catch((err) => {
+    console.error("Copy failed: ", err);
+  });
+};
+
 export default function AllReportsToday({ onNavigate }) {
   const [rows, setRows] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -206,10 +227,6 @@ export default function AllReportsToday({ onNavigate }) {
     onNavigate(map[type], ref_no);
   };
 
-  const handleSumry = (type, ref_no) => {
-    if (type !== "Packages") return;
-    onNavigate("packages_summary_view", ref_no);
-  };
 
   /* ================= FILTERS EFFECT ================= */
   useEffect(() => {
@@ -463,7 +480,14 @@ export default function AllReportsToday({ onNavigate }) {
                         {typeIcon(r.type)} {r.type}
                       </span>
                     </td>
-                    <td className="fw-bold text-dark">{r.ref_no}</td>
+                    <td
+  className="fw-bold text-primary"
+  style={{ cursor: "pointer" }}
+  title="Click to copy Ref No"
+  onClick={() => handleCopyRef(r.ref_no)}
+>
+  {r.ref_no}
+</td>
                     
                     {/* CUSTOMER NAME COLORS: Walk-in = BLUE (#2563eb), Registered = GREEN (#16a34a) */}
                     <td className="fw-bold">
@@ -488,49 +512,36 @@ export default function AllReportsToday({ onNavigate }) {
                     <td className="text-center text-muted">{formatDate(r.booking_date)}</td>
                     <td className="text-end fw-bold text-success px-3">PKR {fmtPKR(r.total_pkr)}</td>
 
-                    {/* STRICT COLUMN-BASED ALIGNMENT (GRID LAYOUT) */}
-                    <td className="text-center">
-                      <div 
-                        style={{ 
-                          display: "grid", 
-                          gridTemplateColumns: "75px 60px 65px", 
-                          gap: "4px", 
-                          justifyContent: "center", 
-                          alignItems: "center" 
-                        }}
-                      >
-                        {/* COLUMN 1: Summary Button or Empty Spacer */}
-                        {r.type === "Packages" ? (
-                          <button
-                            className="btn btn-sm btn-outline-warning rounded-pill px-1 py-1 fw-semibold w-100"
-                            style={{ fontSize: "11px", whiteSpace: "nowrap" }}
-                            onClick={() => handleSumry(r.type, r.ref_no)}
-                          >
-                            📊 Summary
-                          </button>
-                        ) : (
-                          <div></div>
-                        )}
+{/* STRICT COLUMN-BASED ALIGNMENT (GRID LAYOUT) */}
+<td className="text-center">
+  <div 
+    style={{ 
+      display: "grid", 
+      gridTemplateColumns: "60px 65px", 
+      gap: "4px", 
+      justifyContent: "center", 
+      alignItems: "center" 
+    }}
+  >
+    {/* COLUMN 1: View Button */}
+    <button
+      className="btn btn-sm btn-outline-primary rounded-pill px-1 py-1 fw-semibold w-100"
+      style={{ fontSize: "11px", whiteSpace: "nowrap" }}
+      onClick={() => handleView(r.type, r.ref_no)}
+    >
+      👁️ View
+    </button>
 
-                        {/* COLUMN 2: View Button */}
-                        <button
-                          className="btn btn-sm btn-outline-primary rounded-pill px-1 py-1 fw-semibold w-100"
-                          style={{ fontSize: "11px", whiteSpace: "nowrap" }}
-                          onClick={() => handleView(r.type, r.ref_no)}
-                        >
-                          👁️ View
-                        </button>
-
-                        {/* COLUMN 3: Delete Button */}
-                        <button
-                          className="btn btn-sm btn-outline-danger rounded-pill px-1 py-1 fw-semibold w-100"
-                          style={{ fontSize: "11px", whiteSpace: "nowrap" }}
-                          onClick={() => handleDelete(r.type, r.ref_no, r.customer_name, r.total_pkr)}
-                        >
-                          🗑️ Delete
-                        </button>
-                      </div>
-                    </td>
+    {/* COLUMN 2: Delete Button */}
+    <button
+      className="btn btn-sm btn-outline-danger rounded-pill px-1 py-1 fw-semibold w-100"
+      style={{ fontSize: "11px", whiteSpace: "nowrap" }}
+      onClick={() => handleDelete(r.type, r.ref_no, r.customer_name, r.total_pkr)}
+    >
+      🗑️ Delete
+    </button>
+  </div>
+</td>
                   </tr>
                 );
               })}
