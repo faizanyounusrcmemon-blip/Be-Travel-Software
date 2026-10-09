@@ -480,13 +480,25 @@ export default function AllReportsToday({ onNavigate }) {
                         {typeIcon(r.type)} {r.type}
                       </span>
                     </td>
-                    <td
-  className="fw-bold text-primary"
-  style={{ cursor: "pointer" }}
-  title="Click to copy Ref No"
-  onClick={() => handleCopyRef(r.ref_no)}
->
-  {r.ref_no}
+{/* OPTION 2: VIOLET / PURPLE BADGE */}
+<td className="px-2" style={{ whiteSpace: "nowrap" }}>
+  <span
+    onClick={() => handleCopyRef(r.ref_no)}
+    title="Click to copy Ref No"
+    style={{
+      cursor: "pointer",
+      color: "#7c3aed",
+      backgroundColor: "#f3e8ff",
+      border: "1px solid #e9d5ff",
+      padding: "3px 8px",
+      borderRadius: "6px",
+      fontWeight: "700",
+      fontSize: "12px",
+      display: "inline-block"
+    }}
+  >
+    {r.ref_no}
+  </span>
 </td>
                     
                     {/* CUSTOMER NAME COLORS: Walk-in = BLUE (#2563eb), Registered = GREEN (#16a34a) */}
