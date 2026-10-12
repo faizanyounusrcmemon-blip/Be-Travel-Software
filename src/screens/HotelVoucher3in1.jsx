@@ -142,34 +142,122 @@ export default function HotelVoucher3in1({ onNavigate }) {
     const margin = 8;
     const usableWidth = pageWidth - margin * 2;
 
-    const renderElementToImage = async (el) => {
-      if (!el) return null;
-      // Use html2canvas standard renderer; foreignObjectRendering can stall
-      // in Vercel/Chrome when rendering cloned voucher sections.
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        onclone: (clonedDoc) => {
-          // Convert input elements to span text for accurate canvas rendering
-          const inputs = clonedDoc.querySelectorAll("input");
-          inputs.forEach((input) => {
-            const span = clonedDoc.createElement("span");
-            span.innerText = input.value || "";
-            span.className = input.className;
-            span.style.cssText = window.getComputedStyle(input).cssText;
-            span.style.display = "inline-block";
-            if (input.parentNode) {
-              input.parentNode.replaceChild(span, input);
-            }
+
+const renderElementToImage = async (el) => {
+  if (!el) return null;
+
+  // Prevent rendering empty or hidden elements
+  const rect = el.getBoundingClientRect();
+
+  if (
+    !el.isConnected ||
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    console.warn("Skipping empty PDF element:", el.className);
+    return null;
+  }
+
+  // Wait for all normal images, including company logo
+  const images = Array.from(el.querySelectorAll("img"));
+
+  await Promise.all(
+    images.map(async (img) => {
+      try {
+        if (!img.complete) {
+          await new Promise((resolve) => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
           });
-        },
+        }
+
+        if (img.decode) {
+          await img.decode().catch(() => {});
+        }
+      } catch (error) {
+        console.warn("Voucher image could not be decoded:", error);
+      }
+    })
+  );
+
+  const canvas = await html2canvas(el, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: "#ffffff",
+    logging: false,
+    removeContainer: true,
+
+    onclone: (clonedDoc) => {
+      const clonedElement = clonedDoc.querySelector(
+        "." + Array.from(el.classList).join(".")
+      );
+
+      // Replace inputs with readable text
+      const inputs = clonedDoc.querySelectorAll("input");
+
+      inputs.forEach((input) => {
+        const span = clonedDoc.createElement("span");
+
+        span.textContent = input.value || "";
+        span.className = input.className;
+        span.style.cssText =
+          clonedDoc.defaultView.getComputedStyle(input).cssText;
+
+        span.style.display = "inline-block";
+        span.style.boxSizing = "border-box";
+        span.style.minHeight = input.offsetHeight + "px";
+        span.style.padding = "4px 6px";
+        span.style.color = "#111111";
+        span.style.backgroundColor = "#ffffff";
+        span.style.border = "1px solid #ced4da";
+        span.style.whiteSpace = "pre-wrap";
+        span.style.overflowWrap = "anywhere";
+
+        if (input.parentNode) {
+          input.parentNode.replaceChild(span, input);
+        }
       });
-      return {
-        img: canvas.toDataURL("image/png"),
-        height: (canvas.height * usableWidth) / canvas.width,
-      };
-    };
+
+      // Remove CSS background images from zero-size elements.
+      // Keep background colors, text, borders and the actual logo image.
+      clonedDoc.querySelectorAll("*").forEach((node) => {
+        const style = clonedDoc.defaultView.getComputedStyle(node);
+        const bounds = node.getBoundingClientRect();
+
+        if (
+          (bounds.width <= 0 || bounds.height <= 0) &&
+          style.backgroundImage !== "none"
+        ) {
+          node.style.setProperty("background-image", "none", "important");
+        }
+      });
+
+      // Ensure the rendered section has valid dimensions
+      if (clonedElement) {
+        clonedElement.style.setProperty("display", "block");
+        clonedElement.style.setProperty("visibility", "visible");
+        clonedElement.style.setProperty("opacity", "1");
+      }
+    },
+  });
+
+  // Never pass a zero-sized canvas to jsPDF
+  if (
+    !canvas ||
+    canvas.width <= 0 ||
+    canvas.height <= 0
+  ) {
+    throw new Error(
+      "Voucher canvas has invalid dimensions. Please try again."
+    );
+  }
+
+  return {
+    img: canvas.toDataURL("image/png"),
+    height: (canvas.height * usableWidth) / canvas.width,
+  };
+};
 
     const header = await renderElementToImage(voucherRef.current.querySelector(".pdf-header"));
     const refRow = await renderElementToImage(voucherRef.current.querySelector(".pdf-ref-row"));
