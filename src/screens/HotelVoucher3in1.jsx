@@ -144,10 +144,9 @@ export default function HotelVoucher3in1({ onNavigate }) {
 
     const renderElementToImage = async (el) => {
       if (!el) return null;
-      // Vercel/production-safe rendering: use the browser's SVG foreignObject
-      // renderer to avoid html2canvas parser failures on modern CSS.
+      // Use html2canvas standard renderer; foreignObjectRendering can stall
+      // in Vercel/Chrome when rendering cloned voucher sections.
       const canvas = await html2canvas(el, {
-        foreignObjectRendering: true,
         scale: 2,
         useCORS: true,
         backgroundColor: "#ffffff",
