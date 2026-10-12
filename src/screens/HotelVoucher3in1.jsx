@@ -144,8 +144,11 @@ export default function HotelVoucher3in1({ onNavigate }) {
 
     const renderElementToImage = async (el) => {
       if (!el) return null;
+      // Vercel/production-safe rendering: use the browser's SVG foreignObject
+      // renderer to avoid html2canvas parser failures on modern CSS.
       const canvas = await html2canvas(el, {
-        scale: 2.5,
+        foreignObjectRendering: true,
+        scale: 2,
         useCORS: true,
         backgroundColor: "#ffffff",
         onclone: (clonedDoc) => {
@@ -236,11 +239,12 @@ export default function HotelVoucher3in1({ onNavigate }) {
         });
       }
     } catch (err) {
+      console.error("Hotel voucher PDF generation failed:", err);
       Swal.close();
       Swal.fire({
         width: "300px",
         icon: "error",
-        text: "PDF Generation Failed",
+        text: err?.message ? `PDF failed: ${err.message}` : "PDF Generation Failed",
       });
     }
   };
@@ -282,6 +286,7 @@ export default function HotelVoucher3in1({ onNavigate }) {
         };
       }
     } catch (err) {
+      console.error("Hotel voucher print failed:", err);
       Swal.fire({
         icon: "error",
         title: "Print Failed",
