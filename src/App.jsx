@@ -39,6 +39,7 @@ import BankProfiles from "./screens/BankProfiles";
 import CashLedger from "./screens/CashLedger";
 import BalanceSheet from "./screens/BalanceSheet";
 import ExpenseLedger from "./screens/ExpenseLedger";
+import CustomerSaleDetailLedger from "./screens/CustomerSaleDetailLedger";
 
 // REPORTS / MASTER
 import AllReports from "./screens/AllReports";
@@ -181,6 +182,7 @@ export default function App() {
       {page === "cashLedger" && <CashLedger onNavigate={navigate} />}
       {page === "balanceSheet" && <BalanceSheet onNavigate={navigate} />}
       {page === "expenseLedger" && <ExpenseLedger onNavigate={navigate} />}
+      {page === "customerSaleDetailLedger" && <CustomerSaleDetailLedger onNavigate={navigate} />}
 
       {/* ================= REPORTS / MASTER ================= */}
       {page === "allreports" && <AllReports onNavigate={navigate} />}
