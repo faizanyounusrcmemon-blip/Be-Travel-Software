@@ -169,36 +169,53 @@ const renderElementToImage = async (el) => {
     logging: false,
     removeContainer: true,
 
-    onclone: (clonedDoc) => {
-      const clonedElement = clonedDoc.querySelector(
-        "." + Array.from(el.classList).join(".")
-      );
 
-      // Replace inputs with readable text
-      const inputs = clonedDoc.querySelectorAll("input");
+onclone: (clonedDoc) => {
+  // Fix html2canvas createPattern zero-size canvas error.
+  // Disable CSS background images/gradients in the PDF clone only.
+  // Solid background colors, text, borders and logo remain intact.
 
-      inputs.forEach((input) => {
-        const span = clonedDoc.createElement("span");
+  clonedDoc.querySelectorAll("*").forEach((node) => {
+    node.style.setProperty("background-image", "none", "important");
+  });
 
-        span.textContent = input.value || "";
-        span.className = input.className;
-        span.style.cssText =
-          clonedDoc.defaultView.getComputedStyle(input).cssText;
+  clonedDoc.documentElement.style.setProperty(
+    "background-image",
+    "none",
+    "important"
+  );
 
-        span.style.display = "inline-block";
-        span.style.boxSizing = "border-box";
-        span.style.minHeight = input.offsetHeight + "px";
-        span.style.padding = "4px 6px";
-        span.style.color = "#111111";
-        span.style.backgroundColor = "#ffffff";
-        span.style.border = "1px solid #ced4da";
-        span.style.whiteSpace = "pre-wrap";
-        span.style.overflowWrap = "anywhere";
+  if (clonedDoc.body) {
+    clonedDoc.body.style.setProperty(
+      "background-image",
+      "none",
+      "important"
+    );
+  }
 
-        if (input.parentNode) {
-          input.parentNode.replaceChild(span, input);
-        }
-      });
+  // Replace input fields with printable text
+  clonedDoc.querySelectorAll("input").forEach((input) => {
+    const span = clonedDoc.createElement("span");
+
+    span.textContent = input.value || "";
+    span.className = input.className;
+
+    span.style.cssText =
+      clonedDoc.defaultView.getComputedStyle(input).cssText;
+
+    span.style.display = "inline-block";
+    span.style.boxSizing = "border-box";
+    span.style.minHeight = `${input.offsetHeight}px`;
+    span.style.padding = "4px 6px";
+    span.style.color = "#111111";
+    span.style.backgroundColor = "#ffffff";
+    span.style.border = "1px solid #ced4da";
+    span.style.whiteSpace = "pre-wrap";
+    span.style.overflowWrap = "anywhere";
+
+    input.parentNode?.replaceChild(span, input);
+  });
+},
 
       // Remove CSS background images from zero-size elements.
       // Keep background colors, text, borders and the actual logo image.
