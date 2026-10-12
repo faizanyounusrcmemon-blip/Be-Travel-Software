@@ -124,22 +124,18 @@ export default function HotelVoucher({ onNavigate }) {
     const usableWidth = pageWidth - margin * 2;
 
 
-const renderElementToImage = async (el) => {
-  if (!el) return null;
 
-  // Prevent rendering empty or hidden elements
+const renderElementToImage = async (el) => {
+  if (!el || !el.isConnected) return null;
+
   const rect = el.getBoundingClientRect();
 
-  if (
-    !el.isConnected ||
-    rect.width <= 0 ||
-    rect.height <= 0
-  ) {
+  if (rect.width <= 0 || rect.height <= 0) {
     console.warn("Skipping empty PDF element:", el.className);
     return null;
   }
 
-  // Wait for all normal images, including company logo
+  // Wait for the logo and other images to load.
   const images = Array.from(el.querySelectorAll("img"));
 
   await Promise.all(
@@ -167,85 +163,62 @@ const renderElementToImage = async (el) => {
     allowTaint: false,
     backgroundColor: "#ffffff",
     logging: false,
-    removeContainer: true,
 
-
-onclone: (clonedDoc) => {
-  // Fix html2canvas createPattern zero-size canvas error.
-  // Disable CSS background images/gradients in the PDF clone only.
-  // Solid background colors, text, borders and logo remain intact.
-
-  clonedDoc.querySelectorAll("*").forEach((node) => {
-    node.style.setProperty("background-image", "none", "important");
-  });
-
-  clonedDoc.documentElement.style.setProperty(
-    "background-image",
-    "none",
-    "important"
-  );
-
-  if (clonedDoc.body) {
-    clonedDoc.body.style.setProperty(
-      "background-image",
-      "none",
-      "important"
-    );
-  }
-
-  // Replace input fields with printable text
-  clonedDoc.querySelectorAll("input").forEach((input) => {
-    const span = clonedDoc.createElement("span");
-
-    span.textContent = input.value || "";
-    span.className = input.className;
-
-    span.style.cssText =
-      clonedDoc.defaultView.getComputedStyle(input).cssText;
-
-    span.style.display = "inline-block";
-    span.style.boxSizing = "border-box";
-    span.style.minHeight = `${input.offsetHeight}px`;
-    span.style.padding = "4px 6px";
-    span.style.color = "#111111";
-    span.style.backgroundColor = "#ffffff";
-    span.style.border = "1px solid #ced4da";
-    span.style.whiteSpace = "pre-wrap";
-    span.style.overflowWrap = "anywhere";
-
-    input.parentNode?.replaceChild(span, input);
-  });
-},
-
-      // Remove CSS background images from zero-size elements.
-      // Keep background colors, text, borders and the actual logo image.
+    onclone: (clonedDoc) => {
+      // Remove CSS background images and gradients from the PDF clone.
+      // Actual logo images, text, solid backgrounds and borders remain.
       clonedDoc.querySelectorAll("*").forEach((node) => {
-        const style = clonedDoc.defaultView.getComputedStyle(node);
-        const bounds = node.getBoundingClientRect();
-
-        if (
-          (bounds.width <= 0 || bounds.height <= 0) &&
-          style.backgroundImage !== "none"
-        ) {
-          node.style.setProperty("background-image", "none", "important");
-        }
+        node.style.setProperty(
+          "background-image",
+          "none",
+          "important"
+        );
       });
 
-      // Ensure the rendered section has valid dimensions
-      if (clonedElement) {
-        clonedElement.style.setProperty("display", "block");
-        clonedElement.style.setProperty("visibility", "visible");
-        clonedElement.style.setProperty("opacity", "1");
+      clonedDoc.documentElement.style.setProperty(
+        "background-image",
+        "none",
+        "important"
+      );
+
+      if (clonedDoc.body) {
+        clonedDoc.body.style.setProperty(
+          "background-image",
+          "none",
+          "important"
+        );
       }
+
+      // Convert input fields into printable text.
+      clonedDoc.querySelectorAll("input").forEach((input) => {
+        const span = clonedDoc.createElement("span");
+        const computedStyle =
+          clonedDoc.defaultView.getComputedStyle(input);
+
+        span.textContent = input.value || "";
+        span.className = input.className;
+
+        span.style.cssText = input.getAttribute("style") || "";
+        span.style.font = computedStyle.font;
+        span.style.fontSize = computedStyle.fontSize;
+        span.style.fontWeight = computedStyle.fontWeight;
+        span.style.fontFamily = computedStyle.fontFamily;
+        span.style.color = "#111111";
+        span.style.backgroundColor = "#ffffff";
+        span.style.border = "1px solid #ced4da";
+        span.style.boxSizing = "border-box";
+        span.style.display = "inline-block";
+        span.style.minHeight = `${input.getBoundingClientRect().height}px`;
+        span.style.padding = "4px 6px";
+        span.style.whiteSpace = "pre-wrap";
+        span.style.overflowWrap = "anywhere";
+
+        input.parentNode?.replaceChild(span, input);
+      });
     },
   });
 
-  // Never pass a zero-sized canvas to jsPDF
-  if (
-    !canvas ||
-    canvas.width <= 0 ||
-    canvas.height <= 0
-  ) {
+  if (!canvas || canvas.width <= 0 || canvas.height <= 0) {
     throw new Error(
       "Voucher canvas has invalid dimensions. Please try again."
     );
