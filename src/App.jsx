@@ -62,6 +62,7 @@ import AgentCommReportView from "./screens/AgentCommReportView";
 // VOUCHERS
 import CustomizHotelVoucher from "./screens/CustomizHotelVoucher";
 import HotelVoucher from "./screens/HotelVoucher";
+import ZiyaratVoucher from "./screens/ZiyaratVoucher";
 import HotelVoucher3in1 from "./screens/HotelVoucher3in1";
 import TransportVoucher from "./screens/TransportVoucher";
 import CustomizTransportVoucher from "./screens/CustomizTransportVoucher";
@@ -209,6 +210,9 @@ export default function App() {
       )}
       {page === "hotelVoucher" && (
         <HotelVoucher onNavigate={navigate} />
+      )}
+      {page === "ziyaratVoucher" && (
+        <ZiyaratVoucher onNavigate={navigate} />
       )}
       {page === "hotelVoucher3in1" && (
         <HotelVoucher3in1 onNavigate={navigate} />
